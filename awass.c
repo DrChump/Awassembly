@@ -657,6 +657,8 @@ char *convert_to_funnyspeak_if_possible(char *s)
 	else if (strcmp("Z", s) == 0) return "S";
 	else if (strcmp("v", s) == 0) return "b";
 	else if (strcmp("V", s) == 0) return "B";
+	else if (strcmp("x", s) == 0) return " ";
+	else if (strcmp("X", s) == 0) return " ";
 	else if (strcmp(":", s) == 0) return ";";
 	else if (strcmp("\\\"", s) == 0) return "\\'";
 	else return s;

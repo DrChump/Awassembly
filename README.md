@@ -32,6 +32,7 @@ AWA5.0 is a stack based language.
 | eql   |                                                       | execute next tism if top two bubbles are equal                |
 | lss   |                                                       | execute next tism if top bubble is less than second bubble    |
 | gr8   |                                                       | execute next tism if top bubble is greater than second bubble |
+| trm   |                                                       | terminate                                                     |
 | PRINT | String of chars in double quotes                      | PRINTS a string contained in double quotes (not standard)     |
 
 The PRINT macro also converts some chars automatically to AwaSCII. For example:

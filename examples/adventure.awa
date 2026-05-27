@@ -1,0 +1,204 @@
+; adventure
+blo 0 ; num of checks passed
+blo 0 ; number of knocks
+blo 0 ; shoulder bruised
+blo 0 ; checked the back
+blo -128 ; magic number
+jmp 2
+
+lbl 7
+PRINT " (Better not try this again)"
+pop
+sbm 4
+sbm 4
+blo 1
+4dd ; increment check passed
+sbm 4
+jmp 8
+
+lbl 9
+PRINT " (I\'ve been scared enough)"
+pop
+sbm 4
+sbm 4
+sbm 4
+blo 1
+4dd ; increment check passed
+sbm 4
+jmp 10
+
+lbl 11
+PRINT " (My knuckles are bleeding)"
+pop
+sbm 4
+blo 1
+4dd ; increment check passed
+sbm 4
+jmp 12
+
+lbl 13
+PRINT "4. Look behind you\n"
+jmp 14
+
+lbl 2
+; set checks passed to 0
+sbm 4
+sbm 4
+sbm 4
+sbm 4
+pop
+blo 0
+sbm 4
+
+PRINT "\nYou come across a cabin in the woods.\n"
+PRINT "1. Knock on the door"
+; check num knocks
+sbm 4
+sbm 4
+sbm 4
+blo 2
+lss
+jmp 11
+pop
+sbm 4
+sbm 4
+lbl 12
+PRINT "\n"
+PRINT "2. Try to force it open"
+; check shoulder bruised
+sbm 4
+sbm 4
+blo 1
+eql
+jmp 7
+pop
+sbm 4
+sbm 4
+sbm 4
+lbl 8
+PRINT "\n"
+PRINT "3. Check the back of the cabin"
+; check back checked
+sbm 4
+blo 1
+eql
+jmp 9
+pop
+sbm 4
+sbm 4
+sbm 4
+sbm 4
+lbl 10
+PRINT "\n"
+; check all checks passed
+sbm 4
+sbm 4
+sbm 4
+sbm 4
+blo 3
+eql
+jmp 13
+lbl 14
+pop
+sbm 4
+red
+cnt
+blo 1
+eql
+jmp 3 ;single char input
+
+; clear stack till magic number
+lbl 0
+blo -128
+eql
+jmp 1
+pop ; -128
+pop ; top element
+jmp 0
+lbl 1
+pop ; -128, but leave magic number
+
+jmp 2 ; redo
+
+lbl 3 ;single char input
+pop ; 1
+pop ; count (1)
+pop ; double input bubble
+blo '1'
+eql
+jmp 4 ;'1'
+pop
+blo '2'
+eql
+jmp 5 ;'2'
+pop
+blo '3'
+eql
+jmp 6 ;'3'
+pop
+blo '4'
+eql
+jmp 15 ;'4'
+jmp 0
+
+lbl 4 ;'1'
+pop ; '1'
+pop ; '1'
+PRINT "\nYou knock on the door. No one answers.\n"
+; increment number of knocks
+sbm 3
+sbm 3
+sbm 3
+blo 1
+4dd
+sbm 3
+
+jmp 2
+
+lbl 5 ;'2'
+pop ; '2'
+pop ; '2'
+PRINT "\nYou bruise your shoulder trying to force the door open.\n"
+; set bruised to 1
+sbm 3
+sbm 3
+pop
+blo 1
+sbm 3
+sbm 3
+
+jmp 2
+
+lbl 6 ;'3'
+pop ; '3'
+pop ; '3'
+PRINT "\nYou sneak around the back of the cabin only to get jumpscared by a scare crow.\n"
+; set checked back to 1
+sbm 3
+pop
+blo 1
+sbm 3
+sbm 3
+sbm 3
+
+jmp 2
+
+lbl 15 ;'4'
+pop ; '4'
+pop ; '4'
+; check all checks passed
+sbm 4
+sbm 4
+sbm 4
+sbm 4
+blo 3
+eql
+jmp 30
+pop
+sbm 4
+
+jmp 2
+
+lbl 30
+PRINT "\nWeakened from your attempts to break into a strangers cabin, you find yourself unable to scream. A large hooded man towers over you. His face contorts into a grimace as he asks \"Are you ticklish.\" You are in zugzwang.\n"
+trm

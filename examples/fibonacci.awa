@@ -1,0 +1,38 @@
+; fibonacci
+PRINT "How many Fibonacci numbers do you want\n"
+r3d
+blo 0
+blo 1
+
+; stack looks like this
+; fib(n)
+; fib(n-1)
+; loop index
+
+lbl 10 ; loop
+
+; check loop index
+sbm 2
+sbm 2
+blo 0
+eql
+jmp 11 ; DONE
+pop ; 0
+; decrement loop index
+blo 1
+sbm 1
+sub
+sbm 2
+
+; create next number
+dpl
+sbm 2
+4dd
+dpl
+pr1
+
+jmp 10 ; loop
+
+lbl 11 ; DONE
+
+PRINT "\nThere you go!\n"

@@ -1,0 +1,105 @@
+; 10 questions
+PRINT "Thinc of a number between 1 and 1000\n"
+
+; lower bound 0 exclusive
+blo 0
+; upper bound 100*10=1000 inclusive
+blo 100
+blo 10
+mul
+
+lbl 19 ; loop
+; find the middle
+dpl
+sbm 2
+sbm 1
+dpl
+sbm 3
+4dd
+blo 2
+sbm 1
+div
+pop ; pop double bubble
+sbm 1
+pop ; pop remainder
+; stack looks like this:
+; middle
+; upper
+; lower
+
+; check if we are done looping
+; i.e. middle == lower
+sbm 1
+sbm 2
+; stack looks like this:
+; middle
+; lower
+; upper
+eql
+jmp 30 ; DONE
+sbm 1
+sbm 2
+; stack looks like this:
+; middle
+; upper
+; lower
+
+PRINT "Is your number bigger than " dpl pr1 PRINT "(y/N)\n"
+red
+cnt
+blo 1
+eql
+jmp 25 ; input is only on char
+jmp 24
+
+lbl 25 ; input is only on char
+pop ; 1
+pop ; count of chars in input (1)
+pop ; input double bubble
+blo 'y'
+eql
+jmp 23 ; input is 'y'
+jmp 22
+
+lbl 23 ; input is 'y'
+pop ; 'y'
+pop ; input char ('y')
+jmp 21 ; YES
+
+lbl 24 ; input too long
+pop ; 1
+pop ; count of chars in input (>1)
+sbm 0 ; put input away
+jmp 20 ; NO
+
+lbl 22 ; input is 1 char but not 'y'
+pop ; 'y'
+pop ; input char (not 'y')
+jmp 20 ; NO
+
+lbl 21 ; YES
+PRINT "YES\n"
+sbm 2
+sbm 1
+pop
+; stack looks like this:
+; upper
+; middle
+jmp 19 ; loop
+
+lbl 20 ; NO
+PRINT "NO\n"
+sbm 1
+pop
+; stack looks like this:
+; middle
+; lower
+jmp 19 ; loop
+
+lbl 30 ; DONE
+PRINT "This is your number; \n"
+; stack looks like this:
+pop ; middle
+pop ; lower
+pr1 ; upper
+trm

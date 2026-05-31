@@ -23,6 +23,14 @@ blo 0 ; garbage
 lbl 1
 pop
 pop
+;
+cnt ; check for double bubble
+blo 0
+lss
+pop
+pop
+pop
+;
 blo -128
 lss
 jmp 1

@@ -1,0 +1,221 @@
+; jump to address on stack
+; RULE: there can never be a non-magic number lower than -127 on the stack
+; -----VARIABLES BELOW-----
+blo 0 ; game state
+; -----VARIABLES ABOVE-----
+blo 0 ; return address
+blo -128 ; magic number
+blo 0 ; garbage
+blo 0 ; garbage
+
+jmp 2 ; jump to entry point
+
+lbl 0 ; jump to return address [2,31] just below magic number
+; stack looks like this
+; garbage
+; magic number
+; return address
+; other stuff
+
+; goto magic number
+blo 0 ; garbage
+blo 0 ; garbage
+lbl 1
+pop
+pop
+blo -128
+lss
+jmp 1
+pop ; -128
+
+; stack looks like this
+; magic number
+; return address
+; other stuff
+
+; copy return address over
+sbm 1
+dpl
+sbm 2
+
+; stack looks like this
+; return address (copy)
+; magic number
+; return address
+; other stuff
+
+; jump to return address [2,31]
+; must pop twice after every label
+blo 2
+eql
+jmp 2
+pop
+blo 3
+eql
+jmp 3
+pop
+blo 4
+eql
+jmp 4
+pop
+blo 5
+eql
+jmp 5
+pop
+blo 6
+eql
+jmp 6
+pop
+blo 7
+eql
+jmp 7
+pop
+blo 8
+eql
+jmp 8
+pop
+blo 9
+eql
+jmp 9
+pop
+blo 10
+eql
+jmp 10
+pop
+blo 11
+eql
+jmp 11
+pop
+blo 12
+eql
+jmp 12
+pop
+blo 13
+eql
+jmp 13
+pop
+blo 14
+eql
+jmp 14
+pop
+blo 15
+eql
+jmp 15
+pop
+blo 16
+eql
+jmp 16
+pop
+blo 17
+eql
+jmp 17
+pop
+blo 18
+eql
+jmp 18
+pop
+blo 19
+eql
+jmp 19
+pop
+blo 20
+eql
+jmp 20
+pop
+blo 21
+eql
+jmp 21
+pop
+blo 22
+eql
+jmp 22
+pop
+blo 23
+eql
+jmp 23
+pop
+blo 24
+eql
+jmp 24
+pop
+blo 25
+eql
+jmp 25
+pop
+blo 26
+eql
+jmp 26
+pop
+blo 27
+eql
+jmp 27
+pop
+blo 28
+eql
+jmp 28
+pop
+blo 29
+eql
+jmp 29
+pop
+blo 30
+eql
+jmp 30
+pop
+blo 31
+eql
+jmp 31
+pop
+PRINT "ERROR: tried to jump to a label that doesn\'t exist\n"
+PRINT "ERROR: label: "
+pr1
+trm
+
+; -------------------CODE GOES BELOW--------------------
+
+lbl 2 ; entry point
+pop ; mandatory
+pop ; mandatory
+PRINT "This is the start\n"
+;
+; stack looks like this
+; magic number
+; return address
+; game state
+;
+; goto 3
+sbm 1
+pop
+blo 3
+sbm 1
+jmp 0
+
+lbl 3 ; middle
+pop ; mandatory
+pop ; mandatory
+PRINT "This is the middle\n"
+;
+; stack looks like this
+; magic number
+; return address
+; game state
+;
+; increment game state and calculate return address from game state
+; address = state * 2
+; start -> middle -> start -> middle -> end
+sbm 2
+pop
+blo 1
+4dd
+dpl
+sbm 2
+blo 2
+mul
+sbm 1
+jmp 0
+
+lbl 4 ; end
+pop ; mandatory
+pop ; mandatory
+PRINT "This is the end\n"
+trm

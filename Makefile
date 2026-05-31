@@ -1,7 +1,8 @@
 EXAMPLES= \
-      examples/10questions.out \
-      examples/fibonacci.out \
-      examples/adventure.out
+      examples/00_fibonacci.out \
+      examples/10_questions.out \
+      examples/20_adventure.out \
+      examples/30_better_jumping.out
 
 .PHONY: examples
 examples: $(EXAMPLES)

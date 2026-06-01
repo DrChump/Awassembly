@@ -1,0 +1,1167 @@
+; tictactoe
+; RULE: there can never be a non-magic number lower than -127 on the stack
+; -----VARIABLES BELOW-----
+; winner
+; 0: game is still going
+; 1: player 1 won
+; 2: player 2 won
+; 3: draw
+blo 0
+; active player
+; 1 : player 1 is playing
+; -1: player 2 is playing
+blo 1
+; game board
+blo 0 blo 0 blo 0
+blo 0 blo 0 blo 0
+blo 0 blo 0 blo 0
+; -----VARIABLES ABOVE-----
+blo 0 ; return address
+blo -128 ; magic number
+blo 0 ; garbage
+blo 0 ; garbage
+
+jmp 2 ; jump to entry point
+
+lbl 0 ; jump to return address [2,31] just below magic number
+; stack looks like this
+; garbage
+; magic number
+; return address
+; other stuff
+
+; goto magic number
+blo 0 ; garbage
+blo 0 ; garbage
+lbl 1
+pop
+pop
+
+; empty double bubbles are hard to detect, don't know what to do about that
+; 'red' with no user input creates some sort of empty double bubble, I think
+cnt ; check for double bubble
+blo 0
+lss
+pop
+pop
+pop
+
+blo -128
+lss
+jmp 1
+pop ; -128
+
+; stack looks like this
+; magic number
+; return address
+; other stuff
+
+; copy return address over
+sbm 1
+dpl
+sbm 2
+
+; stack looks like this
+; return address (copy)
+; magic number
+; return address
+; other stuff
+
+; jump to return address [2,31]
+; must pop twice after every label
+blo 2
+eql
+jmp 2
+pop
+blo 3
+eql
+jmp 3
+pop
+blo 4
+eql
+jmp 4
+pop
+blo 5
+eql
+jmp 5
+pop
+blo 6
+eql
+jmp 6
+pop
+blo 7
+eql
+jmp 7
+pop
+blo 8
+eql
+jmp 8
+pop
+blo 9
+eql
+jmp 9
+pop
+blo 10
+eql
+jmp 10
+pop
+blo 11
+eql
+jmp 11
+pop
+blo 12
+eql
+jmp 12
+pop
+blo 13
+eql
+jmp 13
+pop
+blo 14
+eql
+jmp 14
+pop
+blo 15
+eql
+jmp 15
+pop
+blo 16
+eql
+jmp 16
+pop
+blo 17
+eql
+jmp 17
+pop
+blo 18
+eql
+jmp 18
+pop
+blo 19
+eql
+jmp 19
+pop
+blo 20
+eql
+jmp 20
+pop
+blo 21
+eql
+jmp 21
+pop
+blo 22
+eql
+jmp 22
+pop
+blo 23
+eql
+jmp 23
+pop
+blo 24
+eql
+jmp 24
+pop
+blo 25
+eql
+jmp 25
+pop
+blo 26
+eql
+jmp 26
+pop
+blo 27
+eql
+jmp 27
+pop
+blo 28
+eql
+jmp 28
+pop
+blo 29
+eql
+jmp 29
+pop
+blo 30
+eql
+jmp 30
+pop
+blo 31
+eql
+jmp 31
+pop
+PRINT "ERROR: tried to jump to a label that doesn\'t exist\n"
+PRINT "ERROR: label: "
+pr1
+trm
+
+; -------------------CODE GOES BELOW--------------------
+
+lbl 2 ; entry point
+pop ; mandatory
+pop ; mandatory
+PRINT "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+PRINT "Let\'s play a game of TicTacToe!\n"
+PRINT "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+;
+; stack looks like this
+; magic number
+; return address
+; game state
+;
+; goto 3
+sbm 1
+pop
+blo 3 ; print game state
+sbm 1
+jmp 0
+
+lbl 5 ; ask for user input
+pop ; mandatory
+pop ; mandatory
+; check the active player
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+; stack looks like this
+; active player
+; magic number
+; other
+PRINT "Player "
+; f(1)=1
+; f(-1)=2
+; f(x)=(1 - x)/2 + 1
+dpl
+blo 1
+sub
+blo 2
+sbm 1
+div
+pop
+sbm 1
+pop ; remainder
+blo 1
+4dd
+; stack looks like this
+; player number
+; active player
+; magic number
+; other
+blo '0'
+4dd
+prn
+PRINT ", select a square (1 to 9). Make sure to only type a single character\n"
+sbm 11
+red
+; stack looks like this
+; double bubble user input
+; magic number
+; return address
+; other
+sbm 2
+sbm 2
+pop
+blo 7 ; input validation
+sbm 2
+cnt
+sbm 1
+sbm 3
+; stack looks like this
+; count (should be 1 if input valid)
+; magic number
+; return address
+; double bubble user input
+; other
+blo 1
+eql
+jmp 0 ; input validation
+pop ; 1
+pop ; count
+sbm 2
+pop
+blo 6 ; wrong input
+sbm 2
+; stack looks like this
+; double bubble user input
+; magic number
+; return address
+; other
+pop ; input double bubble
+jmp 0 ; wrong input
+
+lbl 6 ; wrong input
+pop ; mandatory
+pop ; mandatory
+PRINT "\nInvalid input, try again\n"
+sbm 1
+pop
+blo 3 ; print game state
+sbm 1
+jmp 0
+
+lbl 7 ; input validation
+pop ; mandatory
+pop ; mandatory
+; stack looks like this
+; magic number
+; return address
+; double bubble user input with only 1 character
+; other
+sbm 2
+sbm 2
+pop ; input double bubble
+; stack looks like this
+; input char
+; magic number
+; return address
+; other
+sbm 2
+sbm 2
+pop ; return address
+blo 6 ; wrong input
+sbm 2
+; stack looks like this
+; input char
+; magic number
+; return address
+; other
+; check if input char is number between 1 and 9
+blo '1'
+gr8
+jmp 0 ; wrong input
+pop
+blo '9'
+lss
+jmp 0 ; wrong input
+pop
+
+; copy active player over
+; stack looks like this
+; input char
+; magic number
+; return address
+; game state x9
+; active player
+; other
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+sbm 12
+dpl
+sbm 13
+sbm 1
+; stack looks like this
+; input char
+; active player (copy)
+; magic number
+; return address
+; game state x9
+; active player
+; other
+
+; check if box with that number is empty
+blo '0'
+sbm 1
+sub ; turn input from char to number
+sbm 3
+sbm 3
+sbm 12 ; hide magic number
+sbm 12 ; hide return address
+; stack looks like this
+; input char - '0'
+; active player (copy)
+; game state x9
+; magic number
+; return address
+; active player
+; other
+
+; iterate over boxes [1,9]
+blo 0 ; loop index
+blo 0 ; garbage
+lbl 8 ; loop
+pop ; garbage
+; increment loop index
+blo 1
+4dd
+; stack looks like this
+; loop index
+; input char - '0'
+; active player (copy)
+; game state x?
+; magic number
+; other
+; check if we are at the right box
+eql
+jmp 9 ; check and update box
+lbl 10 ; return from 9
+sbm 3 ; loop index
+sbm 3 ; input char
+sbm 3 ; active player
+sbm 13 ; processed box
+; stack looks like this
+; loop index
+; input char - '0'
+; active player (copy)
+; game state x?
+; magic number
+; return address
+; game state x?
+; game state being processed
+; other
+; check loop index
+blo 9
+gr8
+jmp 8 ; loop
+pop ; garbage
+pop ; loop index
+sbm 1 ; return value
+pop ; active player (1,2)
+; stack looks like this
+; return value 0:good
+; magic number
+; return address
+; other
+; set return address to swap players
+sbm 2
+sbm 2
+pop ; return address
+blo 12 ; swap players
+sbm 2
+blo 0
+eql ; if return value is 0
+jmp 0 ; swap players
+pop
+pop ; return value
+sbm 1
+pop ; return address
+blo 6 ; wrong input
+sbm 1
+jmp 0
+
+lbl 11 ; check win condition
+pop ; mandatory
+pop ; mandatory
+; prepare to go to game over (decisive)
+sbm 1
+pop
+blo 13 ; game over (decisive)
+sbm 1
+; check all 8 win conditions
+; check 123
+sbm 10 ; magic number
+sbm 10 ; return address
+dpl
+sbm 3
+sbm 2
+dpl
+sbm 4
+sbm 2
+dpl
+sbm 5
+sbm 2
+mul
+mul
+; stack looks like this
+; gs1 * gs2 * gs3 (0,1,2,4,8)
+; game state x9
+; magic number
+; return address
+; other
+; f(1) = 0
+; f(8) = 0
+; f(0) = !0
+; f(2) = !0
+; f(4) = !0
+; f(x) = (1-x)*(8-x)
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+; result on top of stack is 0 if game is decisive
+; check all other win conditions and multiply results together
+; if answer is 0 game is won
+; check 456
+sbm 6 ; result
+sbm 6
+sbm 6
+sbm 6
+dpl
+sbm 7
+sbm 2
+dpl
+sbm 8
+sbm 2
+dpl
+sbm 9
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; check 789
+sbm 9 ; result
+sbm 9
+sbm 9
+sbm 9
+sbm 9
+sbm 9
+sbm 9
+dpl
+sbm 10
+sbm 2
+dpl
+sbm 11
+sbm 2
+dpl
+sbm 12
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; check 147
+sbm 7 ; result
+dpl
+sbm 8
+sbm 6
+sbm 8
+sbm 8
+dpl
+sbm 9
+sbm 4
+sbm 9
+sbm 9
+dpl
+sbm 10
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; check 258
+sbm 8 ; result
+sbm 8
+dpl
+sbm 9
+sbm 6
+sbm 9
+sbm 9
+dpl
+sbm 10
+sbm 4
+sbm 10
+sbm 10
+dpl
+sbm 11
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; check 369
+sbm 9 ; result
+sbm 9
+sbm 9
+dpl
+sbm 10
+sbm 6
+sbm 10
+sbm 10
+dpl
+sbm 11
+sbm 4
+sbm 11
+sbm 11
+dpl
+sbm 12
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; check 159
+sbm 9 ; result
+dpl
+sbm 10
+sbm 8
+sbm 10
+sbm 10
+sbm 10
+dpl
+sbm 11
+sbm 5
+sbm 11
+sbm 11
+sbm 11
+dpl
+sbm 12
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; check 357
+sbm 7 ; result
+sbm 7
+sbm 7
+dpl
+sbm 8
+sbm 4
+sbm 8
+dpl
+sbm 9
+sbm 3
+sbm 9
+dpl
+sbm 10
+sbm 2
+mul
+mul
+;
+dpl
+blo 1
+sub
+sbm 1
+blo 8
+sub
+mul
+;
+mul
+; checked every win condition
+
+; stack looks like this
+; result 0:game over
+; game state x9
+; magic number
+; return address
+; other
+; rearrange the stack
+sbm 9
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+; stack looks like this
+; result 0:game over
+; magic number
+; return address
+; game state x9
+; other
+blo 0
+eql
+jmp 0 ; game decisive
+pop ; garbage
+pop ; result
+
+; prepare to go to game over (draw)
+sbm 1
+pop
+blo 14 ; game over (draw)
+sbm 1
+; check if empty box remains by multiplying all boxes together
+sbm 10 ; magic number
+sbm 10 ; return address
+blo 1 ; result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (1)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (2)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (3)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (4)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (5)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (6)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (7)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (8)
+mul ; new result
+sbm 1 ; swap
+dpl
+sbm 12 ; put box away (9)
+mul ; new result
+; if result is bigger than 0, the game is a draw
+blo 0
+lss
+jmp 0 ; game is a draw
+pop ; garbage
+pop ; result
+
+; goto 5 game is still going
+sbm 1
+pop
+blo 5 ; ask for user input
+sbm 1
+jmp 0
+
+lbl 13 ; game over (decisive)
+pop ; mandatory
+pop ; mandatory
+PRINT "~~~~~~~~~~~~~~~~~~~~~~\n"
+PRINT "Player "
+sbm 11 ; magic number
+sbm 11 ; return address
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+sbm 11 ; game board
+dpl
+sbm 12 ; active player
+blo -1
+mul ; invert the player to get the winner
+; get player number
+; f(1)=1
+; f(-1)=2
+; f(x)=(1 - x)/2 + 1
+dpl
+blo 1
+sub
+blo 2
+sbm 1
+div
+pop
+sbm 1
+pop ; remainder
+blo 1
+4dd
+; turn it into char
+blo '0'
+4dd
+prn
+PRINT " won the game!\n"
+PRINT "~~~~~~~~~~~~~~~~~~~~~~\n"
+trm
+
+lbl 14 ; game over (draw)
+pop ; mandatory
+pop ; mandatory
+PRINT "~~~~~~~~~~~~~~~~~~\n"
+PRINT "The game is drawn!\n"
+PRINT "~~~~~~~~~~~~~~~~~~\n"
+trm
+
+lbl 12 ; swap players
+pop ; mandatory
+pop ; mandatory
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+sbm 11
+blo -1
+mul ; swap active player
+sbm 11
+; goto 3
+sbm 1
+pop
+blo 3 ; print game state
+sbm 1
+jmp 0
+
+
+lbl 9 ; check and update box
+; don't double pop here since this is a nonstandard function
+; stack looks like this
+; loop index
+; input char - '0'
+; active player (copy)
+; game state being processed
+; game state x?
+; magic number
+; return address
+; game state x?
+; other
+sbm 1
+pop ; input char
+sbm 2
+sbm 2
+dpl
+blo -1
+mul ; return value replaces input char 0:ok <0:error
+; stack looks like this
+; return value
+; game state being processed
+; loop index
+; active player (copy)
+; game state x?
+; magic number
+; return address
+; game state x?
+; other
+
+sbm 3
+sbm 3
+sbm 3
+; stack looks like this
+; active player (copy)
+; return value
+; game state being processed
+; loop index
+; game state x?
+; magic number
+; return address
+; game state x?
+; other
+
+; change player from (1,-1) to (1,2)
+; f(1)=1
+; f(-1)=2
+; f(x)=(1 - x)/2 + 1
+blo 1
+sub
+blo 2
+sbm 1
+div
+pop
+sbm 1
+pop ; remainder
+blo 1
+4dd
+
+; stack looks like this
+; active player (1,2)
+; return value
+; game state being processed
+; loop index
+; game state x?
+; magic number
+; return address
+; game state x?
+; other
+
+; update game state
+; f(p,0)=p
+; f(p,1)=1
+; f(p,2)=2
+; f(p,g)=p*((2-g)/2) + g
+dpl
+sbm 3
+sbm 3
+sbm 3
+dpl
+sbm 2
+dpl
+sbm 2
+blo 2
+sub
+blo 2
+sbm 1
+div
+pop
+sbm 1
+pop ; remainder
+mul
+4dd ; new game state
+sbm 1
+pop ; old game state
+
+; stack looks like this
+; ((2 - g) / 2) * p + g (new game state)
+; active player (1,2)
+; return value
+; loop index
+; game state x?
+; magic number
+; return address
+; game state x?
+; other
+
+sbm 3
+sbm 2
+sbm 1
+; stack looks like this
+; loop index
+; return value
+; active player (1,2)
+; ((2 - g) / 2) * p + g (new game state)
+; game state x?
+; magic number
+; return address
+; game state x?
+; other
+jmp 10 ; return
+
+lbl 3 ; print game state
+pop ; mandatory
+pop ; mandatory
+PRINT "Gamestate:\n"
+;
+; stack looks like this
+; magic number
+; return address
+; game state
+;
+sbm 10 ; hide magic number
+sbm 10 ; hide return address
+; iterate over boxes [1,9]
+blo 0 ; loop index
+blo 0 ; garbage
+lbl 4 ; loop
+PRINT " "
+pop ; garbage
+; increment loop index
+blo 1
+4dd
+
+; check box
+; f(i,0)=i + '0' (42)
+; f(i,1)='I' (11)
+; f(i,2)='O' (9)
+; f(i,b)=(i+'0')*((b-2)/(-2)) + (b*(2*'I'+(b-1)*('O'-2*'I')))/2
+; f(i,b)= (-2),2,b,-,/,i,'0',+,*,2,1,b,-,2,'I',*,'O',-,*,2,'I',*,+,b,*,/,+
+;
+; stack looks like this
+; i
+; b
+; other
+;
+
+sbm 1
+dpl
+blo -2
+blo 2
+sbm 2
+sbm 2
+sub
+div
+pop
+sbm 1
+pop ; remainder
+
+; stack looks like this
+; ((b-2)/(-2))
+; b
+; i
+; other
+
+sbm 2
+sbm 2
+dpl
+sbm 3
+blo '0'
+4dd
+mul
+sbm 1
+dpl
+dpl
+sbm 3
+
+; stack looks like this
+; b
+; b
+; (i + '0') * ((b-2)/2)
+; b
+; i
+; other
+
+blo 2
+sbm 1
+blo 1
+sbm 1
+sub
+blo 2
+blo 'I'
+mul
+blo 'O'
+sub
+mul
+blo 2
+blo 'I'
+mul
+4dd
+sbm 2
+sbm 2
+mul
+div
+pop
+sbm 1
+pop ; remainder
+4dd
+
+; stack looks like this
+; (b + (2*'I' + ('O' - 'I' * 2) * (b - 1))) / 2 + (i + '0') * ((b-2)/2)
+; b
+; i
+; other
+
+; print box value
+prn
+
+; put box away
+sbm 11
+
+; print newline if loop index is divisible by 3
+dpl
+blo 3
+sbm 1
+div
+pop
+pop
+; stack looks like this
+; remainder of i/3
+; i
+; other
+; f(0) = '\n'
+; f(1) = ' '
+; f(2) = ' '
+; f(r) = '\n'*((2-r)/2) + (r*(2*' ' + (1-r)*' '))/2
+; f(r) = 2,r,2,-,/,'\n',*,2,r,1,-,' ',*,2,' ',*,+,r,*,/,+
+dpl
+dpl
+; stack looks like this
+; r
+; r
+; r
+; i
+; other
+blo 2
+sbm 1
+blo 2
+sub
+div
+pop
+sbm 1
+pop ; remainder
+blo '\n'
+mul
+blo 2
+sbm 2
+sbm 2
+blo 1
+sub
+blo ' '
+mul
+blo 2
+blo ' '
+mul
+4dd
+sbm 3
+sbm 3
+sbm 3
+mul
+div
+pop
+sbm 1
+pop ; remainder
+4dd
+
+; stack looks like this
+; (r * (' ' * 2 + ' ' * (1 - r))) / 2 + '\n' * ((2 - r) / 2)
+; i
+; other
+prn ; print space or newline
+
+; check loop index
+blo 9
+gr8
+jmp 4 ; loop
+pop ; garbage
+pop ; loop index
+PRINT "\n"
+; goto 11
+sbm 1
+pop
+blo 11 ; check win condition
+sbm 1
+jmp 0

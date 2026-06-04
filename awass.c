@@ -121,6 +121,7 @@ typedef enum {
 	TOK_AWASCII,
 	TOK_NUM,
 	TOK_PRINT,
+	TOK_OVER,
 	TOK_STRING,
 	TOK_EOF,
 } TOKEN;
@@ -307,6 +308,21 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "%s:%zu: expected string\n", l.filename, l.linenum);
 				exit(1);
 			}
+		} else if (tok == TOK_OVER) {
+			// OVER 0 is the same as dpl
+			int n;
+			tok = gettoken(&l, &arg);
+			if (tok == TOK_NUM && arg.len < 3 &&
+					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 30) {
+				for (int i = 0; i < n; i++)
+					TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+				TEMP_PRINT("%s", lookup("dpl")->defn); // 1 time
+				TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
+			} else {
+				fprintf(stderr, "%s:%zu: expected 5 bit integer [0,30]\n",
+						l.filename, l.linenum);
+				exit(1);
+			}
 		} else {
 			fprintf(stderr, "%s:%zu: expected operator\n", l.filename, l.linenum);
 			exit(1);
@@ -435,6 +451,8 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 		else {
 			if (strncmp("PRINT", tokstr->start, tokstr->len) == 0)
 				res = TOK_PRINT;
+			else if (strncmp("OVER", tokstr->start, tokstr->len) == 0)
+				res = TOK_OVER;
 			else
 				res = TOK_TISM;
 		}

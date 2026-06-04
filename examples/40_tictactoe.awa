@@ -1,12 +1,6 @@
 ; tictactoe
 ; RULE: there can never be a non-magic number lower than -127 on the stack
 ; -----VARIABLES BELOW-----
-; winner
-; 0: game is still going
-; 1: player 1 won
-; 2: player 2 won
-; 3: draw
-blo 0
 ; active player
 ; 1 : player 1 is playing
 ; -1: player 2 is playing
@@ -57,9 +51,7 @@ pop ; -128
 ; other stuff
 
 ; copy return address over
-sbm 1
-dpl
-sbm 2
+OVER 1
 
 ; stack looks like this
 ; return address (copy)
@@ -219,26 +211,15 @@ lbl 5 ; ask for user input
 pop ; mandatory
 pop ; mandatory
 ; check the active player
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
+OVER 11
 ; stack looks like this
-; active player
+; active player (copy)
 ; magic number
 ; other
 PRINT "Player "
 ; f(1)=1
 ; f(-1)=2
 ; f(x)=(1 - x)/2 + 1
-dpl
 blo 1
 sub
 blo 2
@@ -258,7 +239,6 @@ blo '0'
 4dd
 prn
 PRINT ", select a square (1 to 9). Make sure to only type a single character\n"
-sbm 11
 red
 ; stack looks like this
 ; double bubble user input
@@ -350,20 +330,7 @@ pop
 ; game state x9
 ; active player
 ; other
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-sbm 12
-dpl
-sbm 13
+OVER 12
 sbm 1
 ; stack looks like this
 ; input char
@@ -463,18 +430,13 @@ pop
 blo 13 ; game over (decisive)
 sbm 1
 ; check all 8 win conditions
-; check 123
 sbm 10 ; magic number
 sbm 10 ; return address
-dpl
-sbm 3
-sbm 2
-dpl
-sbm 4
-sbm 2
-dpl
-sbm 5
-sbm 2
+blo 1 ; result of calculation
+; check 123
+OVER 1 ; 1
+OVER 3 ; 2+1
+OVER 5 ; 3+1+1
 mul
 mul
 ; stack looks like this
@@ -496,23 +458,14 @@ sbm 1
 blo 8
 sub
 mul
-; result on top of stack is 0 if game is decisive
+;
+mul ; result on top of stack is 0 if game is decisive
 ; check all other win conditions and multiply results together
 ; if answer is 0 game is won
 ; check 456
-sbm 6 ; result
-sbm 6
-sbm 6
-sbm 6
-dpl
-sbm 7
-sbm 2
-dpl
-sbm 8
-sbm 2
-dpl
-sbm 9
-sbm 2
+OVER 4 ; 4
+OVER 6 ; 5+1
+OVER 8 ; 6+1+1
 mul
 mul
 ;
@@ -526,22 +479,9 @@ mul
 ;
 mul
 ; check 789
-sbm 9 ; result
-sbm 9
-sbm 9
-sbm 9
-sbm 9
-sbm 9
-sbm 9
-dpl
-sbm 10
-sbm 2
-dpl
-sbm 11
-sbm 2
-dpl
-sbm 12
-sbm 2
+OVER 7 ; 7
+OVER 9 ; 8+1
+OVER 11 ; 9+1+1
 mul
 mul
 ;
@@ -555,20 +495,9 @@ mul
 ;
 mul
 ; check 147
-sbm 7 ; result
-dpl
-sbm 8
-sbm 6
-sbm 8
-sbm 8
-dpl
-sbm 9
-sbm 4
-sbm 9
-sbm 9
-dpl
-sbm 10
-sbm 2
+OVER 1 ; 1
+OVER 5 ; 4+1
+OVER 9 ; 7+1+1
 mul
 mul
 ;
@@ -582,21 +511,9 @@ mul
 ;
 mul
 ; check 258
-sbm 8 ; result
-sbm 8
-dpl
-sbm 9
-sbm 6
-sbm 9
-sbm 9
-dpl
-sbm 10
-sbm 4
-sbm 10
-sbm 10
-dpl
-sbm 11
-sbm 2
+OVER 2 ; 2
+OVER 6 ; 5+1
+OVER 10 ; 8+1+1
 mul
 mul
 ;
@@ -610,22 +527,9 @@ mul
 ;
 mul
 ; check 369
-sbm 9 ; result
-sbm 9
-sbm 9
-dpl
-sbm 10
-sbm 6
-sbm 10
-sbm 10
-dpl
-sbm 11
-sbm 4
-sbm 11
-sbm 11
-dpl
-sbm 12
-sbm 2
+OVER 3 ; 3
+OVER 7 ; 6+1
+OVER 11 ; 9+1+1
 mul
 mul
 ;
@@ -639,22 +543,9 @@ mul
 ;
 mul
 ; check 159
-sbm 9 ; result
-dpl
-sbm 10
-sbm 8
-sbm 10
-sbm 10
-sbm 10
-dpl
-sbm 11
-sbm 5
-sbm 11
-sbm 11
-sbm 11
-dpl
-sbm 12
-sbm 2
+OVER 1 ; 1
+OVER 6 ; 5+1
+OVER 11 ; 9+1+1
 mul
 mul
 ;
@@ -668,20 +559,9 @@ mul
 ;
 mul
 ; check 357
-sbm 7 ; result
-sbm 7
-sbm 7
-dpl
-sbm 8
-sbm 4
-sbm 8
-dpl
-sbm 9
-sbm 3
-sbm 9
-dpl
-sbm 10
-sbm 2
+OVER 3 ; 3
+OVER 6 ; 5+1
+OVER 9 ; 7+1+1
 mul
 mul
 ;
@@ -789,19 +669,7 @@ pop ; mandatory
 pop ; mandatory
 PRINT "~~~~~~~~~~~~~~~~~~~~~~\n"
 PRINT "Player "
-sbm 11 ; magic number
-sbm 11 ; return address
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-sbm 11 ; game board
-dpl
-sbm 12 ; active player
+OVER 11 ; copy active player over
 blo -1
 mul ; invert the player to get the winner
 ; get player number
@@ -1035,10 +903,7 @@ pop ; remainder
 ; i
 ; other
 
-sbm 2
-sbm 2
-dpl
-sbm 3
+OVER 2
 blo '0'
 4dd
 mul

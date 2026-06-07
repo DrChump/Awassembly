@@ -122,6 +122,7 @@ typedef enum {
 	TOK_NUM,
 	TOK_PRINT,
 	TOK_OVER,
+	TOK_SURF,
 	TOK_STRING,
 	TOK_EOF,
 } TOKEN;
@@ -236,7 +237,7 @@ int main(int argc, char *argv[])
 									l.filename, l.linenum, (int)arg.len, arg.start);
 							exit(1);
 						}
-					} else if (tok == TOK_NUM && arg.len < 5 &&
+					} else if (tok == TOK_NUM && arg.len <= 4 &&
 							(n = atoi(sv_to_cstr(arg))) >= -128 && n <= 127) {
 						TEMP_PRINT("%s", awastr(n, 8));
 					} else {
@@ -251,7 +252,7 @@ int main(int argc, char *argv[])
 				case AWAT_jmp: {
 					int n;
 					tok = gettoken(&l, &arg);
-					if (tok == TOK_NUM && arg.len < 3 &&
+					if (tok == TOK_NUM && arg.len <= 3 &&
 							(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 31) {
 						TEMP_PRINT("%s", awastr(n, 5));
 					} else {
@@ -312,7 +313,7 @@ int main(int argc, char *argv[])
 			// OVER 0 is the same as dpl
 			int n;
 			tok = gettoken(&l, &arg);
-			if (tok == TOK_NUM && arg.len < 3 &&
+			if (tok == TOK_NUM && arg.len <= 3 &&
 					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 30) {
 				for (int i = 0; i < n; i++)
 					TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
@@ -320,6 +321,19 @@ int main(int argc, char *argv[])
 				TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
 			} else {
 				fprintf(stderr, "%s:%zu: expected 5 bit integer [0,30]\n",
+						l.filename, l.linenum);
+				exit(1);
+			}
+		} else if (tok == TOK_SURF) {
+			// SURF 0 has no effect
+			int n;
+			tok = gettoken(&l, &arg);
+			if (tok == TOK_NUM && arg.len <= 3 &&
+					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 31) {
+				for (int i = 0; i < n; i++)
+					TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+			} else {
+				fprintf(stderr, "%s:%zu: expected 5 bit integer [0,31]\n",
 						l.filename, l.linenum);
 				exit(1);
 			}
@@ -453,6 +467,8 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 				res = TOK_PRINT;
 			else if (strncmp("OVER", tokstr->start, tokstr->len) == 0)
 				res = TOK_OVER;
+			else if (strncmp("SURF", tokstr->start, tokstr->len) == 0)
+				res = TOK_SURF;
 			else
 				res = TOK_TISM;
 		}
@@ -678,6 +694,7 @@ char *convert_to_funnyspeak_if_possible(char *s)
 	else if (strcmp("x", s) == 0) return " ";
 	else if (strcmp("X", s) == 0) return " ";
 	else if (strcmp(":", s) == 0) return ";";
+	else if (strcmp("-", s) == 0) return "~";
 	else if (strcmp("\\\"", s) == 0) return "\\'";
 	else return s;
 }

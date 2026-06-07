@@ -706,17 +706,7 @@ trm
 lbl 12 ; swap players
 pop ; mandatory
 pop ; mandatory
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
+SURF 11 ; active player
 blo -1
 mul ; swap active player
 sbm 11
@@ -758,9 +748,7 @@ mul ; return value replaces input char 0:ok <0:error
 ; game state x?
 ; other
 
-sbm 3
-sbm 3
-sbm 3
+SURF 3
 ; stack looks like this
 ; active player (copy)
 ; return value

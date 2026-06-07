@@ -61,126 +61,12 @@ OVER 1
 
 ; jump to return address [2,31]
 ; must pop twice after every label
-blo 2
-eql
-jmp 2
-pop
-blo 3
-eql
-jmp 3
-pop
-blo 4
-eql
-jmp 4
-pop
-blo 5
-eql
-jmp 5
-pop
-blo 6
-eql
-jmp 6
-pop
-blo 7
-eql
-jmp 7
-pop
-blo 8
-eql
-jmp 8
-pop
-blo 9
-eql
-jmp 9
-pop
-blo 10
-eql
-jmp 10
-pop
-blo 11
-eql
-jmp 11
-pop
-blo 12
-eql
-jmp 12
-pop
-blo 13
-eql
-jmp 13
-pop
-blo 14
-eql
-jmp 14
-pop
-blo 15
-eql
-jmp 15
-pop
-blo 16
-eql
-jmp 16
-pop
-blo 17
-eql
-jmp 17
-pop
-blo 18
-eql
-jmp 18
-pop
-blo 19
-eql
-jmp 19
-pop
-blo 20
-eql
-jmp 20
-pop
-blo 21
-eql
-jmp 21
-pop
-blo 22
-eql
-jmp 22
-pop
-blo 23
-eql
-jmp 23
-pop
-blo 24
-eql
-jmp 24
-pop
-blo 25
-eql
-jmp 25
-pop
-blo 26
-eql
-jmp 26
-pop
-blo 27
-eql
-jmp 27
-pop
-blo 28
-eql
-jmp 28
-pop
-blo 29
-eql
-jmp 29
-pop
-blo 30
-eql
-jmp 30
-pop
-blo 31
-eql
-jmp 31
-pop
+REPEAT 2 31
+    blo ITERATOR
+    eql
+    jmp ITERATOR
+    pop
+END
 PRINT "ERROR: tried to jump to a label that doesn\'t exist\n"
 PRINT "ERROR: label: "
 pr1
@@ -584,15 +470,9 @@ mul
 ; other
 ; rearrange the stack
 sbm 9
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
-sbm 11
+REPEAT 1 9
+    sbm 11
+END
 ; stack looks like this
 ; result 0:game over
 ; magic number
@@ -614,42 +494,12 @@ sbm 1
 sbm 10 ; magic number
 sbm 10 ; return address
 blo 1 ; result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (1)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (2)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (3)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (4)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (5)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (6)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (7)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (8)
-mul ; new result
-sbm 1 ; swap
-dpl
-sbm 12 ; put box away (9)
-mul ; new result
+REPEAT 1 9 ; repeat 9 times for all nine boxes
+    sbm 1 ; swap
+    dpl
+    sbm 12 ; put box away
+    mul ; new result
+END
 ; if result is bigger than 0, the game is a draw
 blo 0
 lss

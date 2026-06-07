@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdint.h>
 #include <assert.h>
 
 /*
@@ -123,6 +124,9 @@ typedef enum {
 	TOK_PRINT,
 	TOK_OVER,
 	TOK_SURF,
+	TOK_REPEAT,
+	TOK_END,
+	TOK_ITERATOR,
 	TOK_STRING,
 	TOK_EOF,
 } TOKEN;
@@ -210,6 +214,14 @@ int main(int argc, char *argv[])
 	TOKEN tok;
 	sview op, arg;
 
+	// for REPEAT macro
+	bool rep_flag = false; // currently in a repeat loop
+	int rep_start = 0; // iterator start num
+	int rep_stop = 0; // iterator stop num
+	int rep_delta = 1; // change of rep_start at every iteration
+	size_t rep_pos = 0; // saved cursor pos in file to jump back to
+	size_t rep_linenum = 0; // saved linenum in file to jump back to
+
 	FILE *tmp = tmpfile();
 	if (tmp == NULL) goto temp_perr;
 
@@ -240,6 +252,19 @@ int main(int argc, char *argv[])
 					} else if (tok == TOK_NUM && arg.len <= 4 &&
 							(n = atoi(sv_to_cstr(arg))) >= -128 && n <= 127) {
 						TEMP_PRINT("%s", awastr(n, 8));
+					} else if (tok == TOK_ITERATOR) {
+						if (!rep_flag) {
+							fprintf(stderr, "%s:%zu: cannot use ITERATOR outside of REPEAT/END block\n",
+									l.filename, l.linenum);
+							exit(1);
+						}
+						size_t it = rep_start;
+						if (it >= 128) {
+							fprintf(stderr, "%s:%zu: ITERATOR too big for 'blo'. (expected: [0,127], got: %zu)\n",
+									l.filename, l.linenum, it);
+							exit(1);
+						}
+						TEMP_PRINT("%s", awastr((int)it, 8));
 					} else {
 						fprintf(stderr, "%s:%zu: expected 8 bit signed integer [-128,127] or AwaSCII char\n",
 								l.filename, l.linenum);
@@ -255,6 +280,19 @@ int main(int argc, char *argv[])
 					if (tok == TOK_NUM && arg.len <= 3 &&
 							(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 31) {
 						TEMP_PRINT("%s", awastr(n, 5));
+					} else if (tok == TOK_ITERATOR) {
+						if (!rep_flag) {
+							fprintf(stderr, "%s:%zu: cannot use ITERATOR outside of REPEAT/END block\n",
+									l.filename, l.linenum);
+							exit(1);
+						}
+						size_t it = rep_start;
+						if (it >= 32) {
+							fprintf(stderr, "%s:%zu: ITERATOR too big for '%s'. (expected: [0,31], got: %zu)\n",
+									l.filename, l.linenum, np->name, it);
+							exit(1);
+						}
+						TEMP_PRINT("%s", awastr((int)it, 5));
 					} else {
 						fprintf(stderr, "%s:%zu: expected 5 bit integer [0,31]\n",
 								l.filename, l.linenum);
@@ -315,32 +353,111 @@ int main(int argc, char *argv[])
 			tok = gettoken(&l, &arg);
 			if (tok == TOK_NUM && arg.len <= 3 &&
 					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 30) {
-				for (int i = 0; i < n; i++)
-					TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
-				TEMP_PRINT("%s", lookup("dpl")->defn); // 1 time
-				TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
+				// empty block because of refactor
+			} else if (tok == TOK_ITERATOR) {
+				if (!rep_flag) {
+					fprintf(stderr, "%s:%zu: cannot use ITERATOR outside of REPEAT/END block\n",
+							l.filename, l.linenum);
+					exit(1);
+				}
+				size_t it = rep_start;
+				if (it >= 31) {
+					fprintf(stderr, "%s:%zu: ITERATOR too big for 'OVER'. (expected: [0,30], got: %zu)\n",
+							l.filename, l.linenum, it);
+					exit(1);
+				}
+				n = (int)it;
 			} else {
 				fprintf(stderr, "%s:%zu: expected 5 bit integer [0,30]\n",
 						l.filename, l.linenum);
 				exit(1);
 			}
+
+			for (int i = 0; i < n; i++)
+				TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+			TEMP_PRINT("%s", lookup("dpl")->defn); // 1 time
+			TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
 		} else if (tok == TOK_SURF) {
 			// SURF 0 has no effect
 			int n;
 			tok = gettoken(&l, &arg);
 			if (tok == TOK_NUM && arg.len <= 3 &&
 					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= 31) {
-				for (int i = 0; i < n; i++)
-					TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+				// empty block because of refactor
+			} else if (tok == TOK_ITERATOR) {
+				if (!rep_flag) {
+					fprintf(stderr, "%s:%zu: cannot use ITERATOR outside of REPEAT/END block\n",
+							l.filename, l.linenum);
+					exit(1);
+				}
+				size_t it = rep_start;
+				if (it >= 32) {
+					fprintf(stderr, "%s:%zu: ITERATOR too big for 'SURF'. (expected: [0,31], got: %zu)\n",
+							l.filename, l.linenum, it);
+					exit(1);
+				}
+				n = (int)it;
 			} else {
 				fprintf(stderr, "%s:%zu: expected 5 bit integer [0,31]\n",
 						l.filename, l.linenum);
 				exit(1);
 			}
+
+			for (int i = 0; i < n; i++)
+				TEMP_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+		} else if (tok == TOK_REPEAT) {
+			if (rep_flag) {
+				fprintf(stderr, "%s:%zu: nested REPEAT/END blocks are not allowed\n",
+						l.filename, l.linenum);
+				exit(1);
+			}
+			rep_flag = true;
+			int n;
+			// start num
+			tok = gettoken(&l, &arg);
+			if (tok == TOK_NUM && arg.len <= 11 &&
+					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= INT32_MAX) {
+				rep_start = n;
+			} else {
+				fprintf(stderr, "%s:%zu: expected positive 32 bit integer [0,%d] for beginning of REPEAT range\n",
+						l.filename, l.linenum, INT32_MAX);
+				exit(1);
+			}
+			// stop num
+			tok = gettoken(&l, &arg);
+			if (tok == TOK_NUM && arg.len <= 11 &&
+					(n = atoi(sv_to_cstr(arg))) >= 0 && n <= INT32_MAX) {
+				rep_stop= n;
+				rep_pos = l.ef.cursor;
+				rep_linenum = l.linenum;
+			} else {
+				fprintf(stderr, "%s:%zu: expected positive 32 bit integer [0,%d] for end of REPEAT range\n",
+						l.filename, l.linenum, INT32_MAX);
+				exit(1);
+			}
+			rep_delta = (rep_start < rep_stop) ? 1 : -1;
+		} else if (tok == TOK_END) {
+			if (!rep_flag) {
+				fprintf(stderr, "%s:%zu: END must be preceeded by REPEAT\n",
+						l.filename, l.linenum);
+				exit(1);
+			}
+			if (rep_start != rep_stop) {
+				rep_start += rep_delta;
+				l.ef.cursor = rep_pos;
+				l.linenum = rep_linenum;
+			} else
+				rep_flag = false;
 		} else {
 			fprintf(stderr, "%s:%zu: expected operator\n", l.filename, l.linenum);
 			exit(1);
 		}
+	}
+
+	// never found token END after token REPEAT
+	if (rep_flag) {
+		fprintf(stderr, "%s:%zu: expected END after REPEAT\n", l.filename, rep_linenum);
+		exit(1);
 	}
 
 	FILE *out = fopen(outfile, "w");
@@ -469,6 +586,12 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 				res = TOK_OVER;
 			else if (strncmp("SURF", tokstr->start, tokstr->len) == 0)
 				res = TOK_SURF;
+			else if (strncmp("REPEAT", tokstr->start, tokstr->len) == 0)
+				res = TOK_REPEAT;
+			else if (strncmp("END", tokstr->start, tokstr->len) == 0)
+				res = TOK_END;
+			else if (strncmp("ITERATOR", tokstr->start, tokstr->len) == 0)
+				res = TOK_ITERATOR;
 			else
 				res = TOK_TISM;
 		}

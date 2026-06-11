@@ -125,11 +125,16 @@ typedef enum {
 	TOK_OVER,
 	TOK_SURF,
 	TOK_REPEAT,
-	TOK_END,
+	TOK_REPEAT_END,
 	TOK_ITERATOR,
 	TOK_STRING,
 	TOK_EOF,
 } TOKEN;
+
+typedef struct {
+	char *start;
+	size_t len;
+} sview;
 
 typedef struct {
 	char *content;
@@ -144,10 +149,96 @@ typedef struct {
 	AWATISM tism;
 } lexer;
 
+typedef struct st_node st_node;
+
 typedef struct {
-	char *start;
-	size_t len;
-} sview;
+	st_node *iterator;
+} parser;
+
+typedef enum {
+	ST_TISM     = 1<<0,
+	ST_CONST    = 1<<1,
+	ST_AWASCII  = 1<<2,
+	ST_REPEAT   = 1<<3,
+	ST_ITERATOR = 1<<4,
+	ST_SURF     = 1<<5,
+	ST_OVER     = 1<<6,
+	ST_MACRO    = 1<<7,
+	ST_STRING   = 1<<8,
+	ST_PRINT    = 1<<9,
+} NODE_TAG;
+
+typedef struct {
+	AWATISM tag;
+	st_node *arg;
+} st_tism;
+
+typedef struct {
+	int val;
+} st_const;
+
+typedef struct {
+	char *awastr;
+} st_awascii;
+
+typedef struct {
+	st_node *range_start;
+	st_node *range_stop;
+	char *iterator_name; //TODO: something else
+	st_node *iterator; //TODO: shared iterator in loop
+	st_node *body;
+} st_repeat;
+
+typedef struct {
+	int val;
+} st_iterator;
+
+typedef struct {
+	st_node *arg;
+} st_surf;
+
+typedef struct {
+	st_node *arg;
+} st_over;
+
+typedef struct {
+	st_node *arg;
+} st_print;
+
+typedef struct {
+	sview sv;
+} st_string;
+
+typedef struct {
+	//TODO: arguments
+	st_node *def;
+} st_macro;
+
+struct st_node {
+	char *filename;
+	size_t linenum;
+	NODE_TAG tag;
+	union {
+		st_tism tism;
+		st_const constant;
+		st_awascii awascii;
+		st_repeat repeat;
+		st_iterator iterator;
+		st_surf surf;
+		st_over over;
+		st_macro macro;
+		st_print print;
+		st_string string;
+	} as;
+	st_node *next;
+};
+
+typedef struct {
+	uint64_t tags;
+	int int_minval;
+	int int_maxval;
+	int int_awa_bits;
+} expected_nodes;
 
 typedef struct nlist nlist;
 struct nlist {
@@ -160,6 +251,7 @@ unsigned hash(char *s);
 nlist *lookup(char *s);
 nlist *install(char *name, char *defn);
 bool undef(char *name);
+void free_lookup_table();
 
 void usage(char *progname);
 bool read_entire_file(entire_file *ef, char *filename);
@@ -168,7 +260,8 @@ TOKEN gettoken(lexer *l, sview *tokstr);
 
 char *awastr(int8_t val, int bits);
 void init_lookup_table(void);
-AWATISM tism_from_str(sview tstr);
+AWATISM tism_from_sv(sview tstr);
+char *str_from_tism(AWATISM tism);
 
 bool print_stack_push(char *s);
 char *print_stack_pop(void);
@@ -177,6 +270,11 @@ int print_stack_size(void);
 char *convert_to_funnyspeak_if_possible(char *s);
 char *sv_to_cstr(sview s);
 void free_cstr_buf(void);
+
+st_node *parse(lexer *l, parser *p);
+bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en);
+st_node *new_st_node();
+void free_st_nodes();
 
 int main(int argc, char *argv[])
 {
@@ -211,6 +309,31 @@ int main(int argc, char *argv[])
 	}
 	l.filename = infile;
 	l.linenum = 1;
+
+	parser p = {0};
+	st_node *root = parse(&l, &p);
+
+	FILE *tmp = tmpfile();
+	if (tmp == NULL) goto temp_perr;
+
+#define TEMP_PRINT(...) \
+	do { \
+		if (fprintf(tmp, __VA_ARGS__) < 0) goto temp_perr; \
+	} while (0)
+
+	TEMP_PRINT("Awa");
+
+	// TODO check expected nodes durint parsing already ???
+	expected_nodes en = { .tags = ST_TISM | ST_REPEAT | ST_SURF | ST_OVER | ST_MACRO | ST_PRINT };
+	if (generate_bytecode(root, tmp, en)) {
+		printf("Success!\n");
+	} else {
+		printf("Failure!\n");
+	}
+	free_st_nodes();
+
+	if (0) {
+
 	TOKEN tok;
 	sview op, arg;
 
@@ -222,15 +345,6 @@ int main(int argc, char *argv[])
 	size_t rep_pos = 0; // saved cursor pos in file to jump back to
 	size_t rep_linenum = 0; // saved linenum in file to jump back to
 
-	FILE *tmp = tmpfile();
-	if (tmp == NULL) goto temp_perr;
-
-#define TEMP_PRINT(...) \
-	do { \
-		if (fprintf(tmp, __VA_ARGS__) < 0) goto temp_perr; \
-	} while (0)
-
-	TEMP_PRINT("Awa");
 	while ((tok = gettoken(&l, &op)) != TOK_EOF) {
 		if (tok == TOK_TISM) {
 			nlist *np = lookup(sv_to_cstr(op));
@@ -436,7 +550,7 @@ int main(int argc, char *argv[])
 				exit(1);
 			}
 			rep_delta = (rep_start < rep_stop) ? 1 : -1;
-		} else if (tok == TOK_END) {
+		} else if (tok == TOK_REPEAT_END) {
 			if (!rep_flag) {
 				fprintf(stderr, "%s:%zu: END must be preceeded by REPEAT\n",
 						l.filename, l.linenum);
@@ -459,6 +573,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s:%zu: expected END after REPEAT\n", l.filename, rep_linenum);
 		exit(1);
 	}
+	} // ENDIF
 
 	FILE *out = fopen(outfile, "w");
 	if (out == NULL) goto out_perr;
@@ -487,6 +602,7 @@ int main(int argc, char *argv[])
 	printf("Awawa\n");
 	free_entire_file(l.ef);
 	free_cstr_buf();
+	free_lookup_table();
 
 	return 0;
 
@@ -589,7 +705,7 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 			else if (strncmp("REPEAT", tokstr->start, tokstr->len) == 0)
 				res = TOK_REPEAT;
 			else if (strncmp("END", tokstr->start, tokstr->len) == 0)
-				res = TOK_END;
+				res = TOK_REPEAT_END;
 			else if (strncmp("ITERATOR", tokstr->start, tokstr->len) == 0)
 				res = TOK_ITERATOR;
 			else
@@ -598,7 +714,7 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 	}
 
 	if (res == TOK_TISM)
-		l->tism = tism_from_str(*tokstr);
+		l->tism = tism_from_sv(*tokstr);
 	else
 		l->tism = AWAT_invalid;
 
@@ -699,6 +815,20 @@ bool undef(char *name)
 	return false;
 }
 
+void free_lookup_table()
+{
+	nlist *np, *prev;
+	for (int i = 0; i < HASHSIZE; i++) {
+		for (np = hashtab[i]; np != NULL;) {
+			prev = np;
+			np = np->next;
+			free(prev->defn);
+			free(prev->name);
+			free(prev);
+		}
+	}
+}
+
 char *awastr(int8_t val, int bits)
 {
 	static char res[100];
@@ -742,7 +872,7 @@ void init_lookup_table(void)
 #undef X
 }
 
-AWATISM tism_from_str(sview tstr)
+AWATISM tism_from_sv(sview tstr)
 {
 	if (strncmp("trm", tstr.start, tstr.len) == 0) return AWAT_trm;
 #define X(name) \
@@ -751,6 +881,27 @@ AWATISM tism_from_str(sview tstr)
 #undef X
 	else return AWAT_invalid;
 }
+
+char *str_from_tism(AWATISM tism)
+{
+	char *result = NULL;
+	switch (tism) {
+	case AWAT_trm:
+		result = "trm";
+		break;
+#define X(name) \
+	case AWAT_ ## name: \
+		result = #name; \
+		break;
+	AWATISM_LIST
+#undef X
+	case AWAT_invalid:
+		assert(false);
+		break;
+	}
+	return result;
+}
+
 
 static char *cstr_buf;
 static size_t cstr_buf_size;
@@ -820,5 +971,336 @@ char *convert_to_funnyspeak_if_possible(char *s)
 	else if (strcmp("-", s) == 0) return "~";
 	else if (strcmp("\\\"", s) == 0) return "\\'";
 	else return s;
+}
+
+typedef struct {
+	void *data;
+	size_t pos;
+	size_t capacity;
+} node_arena;
+static node_arena arena = {0};
+
+st_node *new_st_node()
+{
+	if (arena.capacity == 0) {
+		arena.capacity = 500*1024*1024;
+		arena.data = calloc(1, arena.capacity);
+	}
+	assert(arena.capacity - arena.pos >= sizeof(st_node));
+	st_node *result = (st_node *)((char *)arena.data + arena.pos);
+	arena.pos += sizeof(st_node);
+	return result;
+}
+
+void free_st_nodes()
+{
+	free(arena.data);
+}
+
+// TODO: syntax checking with extra struct parser
+st_node *parse(lexer *l, parser *p)
+{
+	static int scope_depth = 0;
+	st_node *node = NULL;
+	st_node **cur = &node;
+
+	TOKEN tok;
+	sview op;
+	bool done = false;
+	scope_depth += 1;
+	while (!done) {
+		tok = gettoken(l, &op);
+
+		if ((*cur) != NULL)
+			cur = &((*cur)->next);
+
+		if (tok != TOK_EOF && tok != TOK_REPEAT_END && tok != TOK_ITERATOR) {
+			(*cur) = new_st_node(); //calloc(1, sizeof(st_node));
+			(*cur)->filename = l->filename;
+			(*cur)->linenum = l->linenum;
+		}
+
+		switch (tok) {
+		case TOK_EOF:
+			// TODO This prevents proper error message generation
+			// maybe pack expected tokens into parser struct
+			// or just let generate bytecode anyway even if we encounter this error
+			// just to get a proper error message
+			assert(scope_depth == 1); // TODO: error message
+			done = true;
+			break;
+		case TOK_REPEAT_END:
+			// TODO error message if alread in top scope
+			p->iterator = NULL; //TODO support nested loops
+			done = true; // Up a level
+			break;
+		case TOK_TISM:
+			(*cur)->tag = ST_TISM;
+			(*cur)->as.tism.tag = l->tism;
+			(*cur)->as.tism.arg = NULL;
+			switch (l->tism) {
+				case AWAT_blo:
+				case AWAT_sbm:
+				case AWAT_srn:
+				case AWAT_lbl:
+				case AWAT_jmp:
+					(*cur)->as.tism.arg = parse(l, p);
+					break;
+				default:
+					break;
+			}
+			break;
+		case TOK_AWASCII:
+			(*cur)->tag = ST_AWASCII;
+			nlist *np = lookup(sv_to_cstr(op));
+			assert(np); //TODO: error reporting
+			(*cur)->as.awascii.awastr = np->defn;
+			done = true; // Up a level
+			break;
+		case TOK_NUM:
+			(*cur)->tag = ST_CONST;
+			assert(op.len <= 8); //TODO proper number parsing
+			(*cur)->as.constant.val = atoi(sv_to_cstr(op));
+			done = true; // Up a level
+			break;
+		case TOK_OVER:
+			(*cur)->tag = ST_OVER;
+			(*cur)->as.over.arg = parse(l, p);
+			break;
+		case TOK_SURF:
+			(*cur)->tag = ST_SURF;
+			(*cur)->as.surf.arg = parse(l, p);
+			break;
+		case TOK_STRING:
+			(*cur)->tag = ST_STRING;
+			(*cur)->as.string.sv = op;
+			done = true; // Up a level
+			break;
+		case TOK_PRINT:
+			(*cur)->tag = ST_PRINT;
+			(*cur)->as.print.arg = parse(l, p);
+			break;
+		case TOK_REPEAT:
+			(*cur)->tag = ST_REPEAT;
+			(*cur)->as.repeat.range_start = parse(l, p);
+			(*cur)->as.repeat.range_stop = parse(l, p);
+			st_node *it = new_st_node();
+			it->tag = ST_ITERATOR;
+			p->iterator = it;
+			(*cur)->as.repeat.iterator = it;
+			(*cur)->as.repeat.body = parse(l, p);
+			break;
+		case TOK_ITERATOR:
+			assert(p->iterator);
+			(*cur) = p->iterator; // TODO change this to look up named iterator for nested loops
+			done = true; // Up a level
+			break;
+		// TODO: TOK_NAME for named iterators in nested loops
+		}
+	}
+	scope_depth -= 1;
+
+	return node;
+}
+
+#define GEN_PRINT(...) \
+	do { \
+		if (fprintf(outfile, __VA_ARGS__) < 0) goto gen_perr; \
+	} while (0)
+
+bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
+{
+	if (node == NULL) {
+		if (en.tags == 0) return true; // nothing was expected and we got nothing
+		else {
+			// TODO error message
+			assert(false);
+		}
+	}
+
+	for (; node != NULL; node = node->next) {
+		assert(node->tag & en.tags); // TODO error message
+		switch (node->tag) {
+		case ST_TISM: {
+			nlist *np = lookup(str_from_tism(node->as.tism.tag));
+			assert(np);
+			GEN_PRINT("%s", np->defn);
+			expected_nodes en_next = { .tags = ST_CONST | ST_AWASCII | ST_ITERATOR };
+			switch (node->as.tism.tag) {
+				case AWAT_blo:
+					en_next.int_minval = -128;
+					en_next.int_maxval = 127;
+					en_next.int_awa_bits = 8;
+					assert(node->as.tism.arg != NULL);
+					break;
+				case AWAT_sbm:
+				case AWAT_srn:
+				case AWAT_lbl:
+				case AWAT_jmp:
+					en_next.int_minval = 0;
+					en_next.int_maxval = 31;
+					en_next.int_awa_bits = 5;
+					assert(node->as.tism.arg != NULL);
+					break;
+				default:
+					en_next.tags = 0;
+					assert(node->as.tism.arg == NULL);
+					break;
+			}
+			// give the shared iterator filename and linenumber for error reporting
+			if (node->as.tism.arg != NULL && node->as.tism.arg->tag == ST_ITERATOR) {
+				node->as.tism.arg->linenum = node->linenum;
+				node->as.tism.arg->filename = node->filename;
+			}
+			if (!generate_bytecode(node->as.tism.arg, outfile, en_next)) return false;
+			} break;
+		case ST_CONST:
+			if (en.int_minval <= node->as.constant.val
+					&& node->as.constant.val <= en.int_maxval) {
+				GEN_PRINT("%s", awastr(node->as.constant.val, en.int_awa_bits));
+			} else {
+				// TODO error message
+				assert(false);
+			}
+			break;
+		case ST_AWASCII:
+			GEN_PRINT("%s", node->as.awascii.awastr);
+			break;
+		case ST_REPEAT: {
+			st_node *start = node->as.repeat.range_start;
+			int startval = 0;
+			if (start->tag == ST_CONST)
+				startval = start->as.constant.val;
+			else if (start->tag == ST_ITERATOR)
+				startval = start->as.iterator.val;
+			else {
+				// TODO error message
+				assert(false);
+			}
+
+			st_node *stop = node->as.repeat.range_stop;
+			int stopval = 0;
+			if (stop->tag == ST_CONST)
+				stopval = stop->as.constant.val;
+			else if (stop->tag == ST_ITERATOR)
+				stopval = stop->as.iterator.val;
+			else {
+				// TODO error message
+				assert(false);
+			}
+
+			st_node *iterator = node->as.repeat.iterator;
+			assert(iterator);
+			assert(iterator->tag == ST_ITERATOR);
+
+			int delta = (startval > stopval) ? -1 : 1;
+
+			for (int i = startval; i <= stopval*delta; i += delta) {
+				iterator->as.iterator.val = i;
+				if (!generate_bytecode(node->as.repeat.body, outfile, en)) return false;
+			}
+
+			} break;
+		case ST_ITERATOR:
+			// just check iterator against expected and print
+			int val = node->as.iterator.val;
+			if (en.int_minval <= val && val <= en.int_maxval)
+				GEN_PRINT("%s", awastr(val, en.int_awa_bits));
+			else {
+				// TODO error message
+				assert(false);
+			}
+			break;
+		case ST_SURF: {
+			NODE_TAG tag = node->as.over.arg->tag;
+			int n;
+			if (tag == ST_CONST)
+				n = node->as.over.arg->as.constant.val;
+			else if (tag == ST_ITERATOR)
+				n = node->as.over.arg->as.iterator.val;
+			else {
+				// TODO error message
+				assert(false);
+			}
+
+			if (0 <= n && n <= 31) {
+				for (int i = 0; i < n; i++)
+					GEN_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+			} else {
+				// TODO error message
+				assert(false);
+			}
+			} break;
+		case ST_OVER: {
+			NODE_TAG tag = node->as.over.arg->tag;
+			int n;
+			if (tag == ST_CONST)
+				n = node->as.over.arg->as.constant.val;
+			else if (tag == ST_ITERATOR)
+				n = node->as.over.arg->as.iterator.val;
+			else {
+				// TODO error message
+				assert(false);
+			}
+			if (0 <= n && n <= 30) {
+				for (int i = 0; i < n; i++)
+					GEN_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+				GEN_PRINT("%s", lookup("dpl")->defn); // 1 time
+				GEN_PRINT("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
+			} else {
+				// TODO error message
+				assert(false);
+			}
+			} break;
+		case ST_MACRO:
+			assert(false && "macro not implemented");
+			break;
+		case ST_STRING: {
+			sview arg = node->as.string.sv;
+			while (arg.len > 0) {
+				size_t len;
+				if (*arg.start == '\\')
+					len = 2;
+				else
+					len = 1;
+				assert(arg.len >= len);
+				sview v = {.start = arg.start, .len = len};
+				nlist *np = lookup(convert_to_funnyspeak_if_possible(sv_to_cstr(v)));
+				if (np != NULL) {
+					if (!print_stack_push(np->defn)) {
+#define PRINTSTACK_FLUSH() \
+						char *printme; \
+						int size = print_stack_size(); \
+						while ((printme = print_stack_pop()) != NULL) { \
+							GEN_PRINT("%s", lookup("blo")->defn); \
+							GEN_PRINT("%s", printme); \
+						} \
+						GEN_PRINT("%s", lookup("srn")->defn); \
+						GEN_PRINT("%s", awastr(size, 5)); \
+						GEN_PRINT("%s", lookup("prn")->defn);
+						PRINTSTACK_FLUSH();
+						print_stack_push(np->defn);
+					}
+				} else {
+					fprintf(stderr, "%s:%zu: couldn't look up %.*s\n",
+							node->filename, node->linenum, (int)v.len, v.start);
+					exit(1);
+				}
+				arg.len -= len;
+				arg.start += len;
+			}
+			PRINTSTACK_FLUSH();
+			} break;
+		case ST_PRINT: {
+			expected_nodes en_next = { .tags = ST_STRING };
+			if (!generate_bytecode(node->as.print.arg, outfile, en_next)) return false;
+			} break;
+		}
+	}
+
+	return true;
+gen_perr:
+	// TODO: print something to stderr
+	return false;
 }
 

@@ -1,0 +1,18 @@
+REPEAT this_is_a_long_name 1 2
+  PRINT "This is my "
+  blo this_is_a_long_name
+  blo '0'
+  4dd
+  prn
+  PRINT ". pyramid!\n"
+  REPEAT j 1 9
+    REPEAT i 1 j
+      blo i
+      blo '0'
+      4dd
+      prn
+    END
+    blo '\n'
+    prn
+  END
+END

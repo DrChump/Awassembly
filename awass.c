@@ -288,6 +288,7 @@ sdag_node *lookup_iterator_name(parser *p, sview name);
 
 bool cstr_sv_cmp(char *cstr, sview sv);
 char *tokstr(TOKEN t);
+char *tagstr(NODE_TAG t);
 
 int main(int argc, char *argv[])
 {
@@ -984,6 +985,23 @@ sdag_node *parse(lexer *l, parser *p)
 		fprintf(stderr, "\n"); \
 	} while(0)
 
+char *tagstr(NODE_TAG t)
+{
+	switch (t) {
+	case ST_TISM:     return "awatism instruction";
+	case ST_AWASCII:  return "awascii char";
+	case ST_CONST:    return "numeric constant";
+	case ST_PRINT:    return "PRINT macro";
+	case ST_OVER:     return "OVER macro";
+	case ST_SURF:     return "SURF macro";
+	case ST_REPEAT:   return "REPEAT";
+	case ST_ITERATOR: return "ITERATOR";
+	case ST_STRING:   return "string literal";
+	case ST_NAME:     return "name (loop index)";
+	default:          return "INVALID STRING LITERAL (This should never be displayed)";
+	}
+}
+
 bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 {
 	if (node == NULL) {
@@ -995,7 +1013,21 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 	}
 
 	for (; node != NULL; node = node->next) {
-		assert(node->tag & en.tags); // TODO error message (might be unreachable)
+		if (!(node->tag & en.tags)) {
+			if (node->tag == ST_NAME && (en.tags & ST_ITERATOR)) {
+				sview sv = node->as.name.sv;
+				ERROR_GEN("Got '%.*s', but it does not refer to anything", (int)sv.len, sv.start);
+			}
+
+			char exptagstr[1000] = {0};
+			for (int i = 0; i < 20; i++) {
+				if (1<<i & en.tags) {
+					strcat(exptagstr, "\n    ");
+					strcat(exptagstr, tagstr(1<<i));
+				}
+			}
+			ERROR_GEN("Got %s, but expected one of %s", tagstr(node->tag), exptagstr);
+		}
 		switch (node->tag) {
 		case ST_TISM: {
 			nlist *np = lookup(str_from_tism(node->as.tism.tag));

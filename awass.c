@@ -118,17 +118,18 @@ typedef enum {
 #undef X
 
 typedef enum {
-	TOK_TISM,
-	TOK_AWASCII,
-	TOK_NUM,
-	TOK_PRINT,
-	TOK_OVER,
-	TOK_SURF,
-	TOK_REPEAT,
-	TOK_REPEAT_END,
-	TOK_ITERATOR,
-	TOK_STRING,
-	TOK_EOF,
+	TOK_TISM       = 1<<0,
+	TOK_AWASCII    = 1<<1,
+	TOK_NUM        = 1<<2,
+	TOK_PRINT      = 1<<3,
+	TOK_OVER       = 1<<4,
+	TOK_SURF       = 1<<5,
+	TOK_REPEAT     = 1<<6,
+	TOK_REPEAT_END = 1<<7,
+	TOK_ITERATOR   = 1<<8,
+	TOK_STRING     = 1<<9,
+	TOK_NAME       = 1<<10,
+	TOK_EOF        = 1<<11,
 } TOKEN;
 
 typedef struct {
@@ -149,10 +150,11 @@ typedef struct {
 	AWATISM tism;
 } lexer;
 
-typedef struct st_node st_node;
+typedef struct sdag_node sdag_node;
 
 typedef struct {
-	st_node *iterator;
+	sdag_node *iterator;
+	uint64_t exptoks;
 } parser;
 
 typedef enum {
@@ -166,11 +168,12 @@ typedef enum {
 	ST_MACRO    = 1<<7,
 	ST_STRING   = 1<<8,
 	ST_PRINT    = 1<<9,
+	ST_NAME     = 1<<10,
 } NODE_TAG;
 
 typedef struct {
 	AWATISM tag;
-	st_node *arg;
+	sdag_node *arg;
 } st_tism;
 
 typedef struct {
@@ -182,27 +185,32 @@ typedef struct {
 } st_awascii;
 
 typedef struct {
-	st_node *range_start;
-	st_node *range_stop;
-	char *iterator_name; //TODO: something else
-	st_node *iterator; //TODO: shared iterator in loop
-	st_node *body;
+	sdag_node *range_start;
+	sdag_node *range_stop;
+	sdag_node *iterator;
+	sdag_node *body;
 } st_repeat;
 
 typedef struct {
 	int val;
+	sdag_node *name;
+	sdag_node *next_it;
 } st_iterator;
 
 typedef struct {
-	st_node *arg;
+	sview sv;
+} st_name;
+
+typedef struct {
+	sdag_node *arg;
 } st_surf;
 
 typedef struct {
-	st_node *arg;
+	sdag_node *arg;
 } st_over;
 
 typedef struct {
-	st_node *arg;
+	sdag_node *arg;
 } st_print;
 
 typedef struct {
@@ -211,10 +219,10 @@ typedef struct {
 
 typedef struct {
 	//TODO: arguments
-	st_node *def;
+	sdag_node *def;
 } st_macro;
 
-struct st_node {
+struct sdag_node {
 	char *filename;
 	size_t linenum;
 	NODE_TAG tag;
@@ -229,8 +237,9 @@ struct st_node {
 		st_macro macro;
 		st_print print;
 		st_string string;
+		st_name name;
 	} as;
-	st_node *next;
+	sdag_node *next;
 };
 
 typedef struct {
@@ -271,10 +280,13 @@ char *convert_to_funnyspeak_if_possible(char *s);
 char *sv_to_cstr(sview s);
 void free_cstr_buf(void);
 
-st_node *parse(lexer *l, parser *p);
-bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en);
-st_node *new_st_node();
-void free_st_nodes();
+sdag_node *parse(lexer *l, parser *p);
+bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en);
+sdag_node *new_sdag_node();
+void free_sdag_nodes();
+sdag_node *lookup_iterator_name(parser *p, sview name);
+
+bool cstr_sv_cmp(char *cstr, sview sv);
 
 int main(int argc, char *argv[])
 {
@@ -310,8 +322,8 @@ int main(int argc, char *argv[])
 	l.filename = infile;
 	l.linenum = 1;
 
-	parser p = {0};
-	st_node *root = parse(&l, &p);
+	parser p = {.exptoks = TOK_TISM | TOK_REPEAT | TOK_REPEAT_END | TOK_SURF | TOK_OVER | TOK_PRINT | TOK_EOF};
+	sdag_node *root = parse(&l, &p);
 
 	FILE *tmp = tmpfile();
 	if (tmp == NULL) goto temp_perr;
@@ -323,14 +335,13 @@ int main(int argc, char *argv[])
 
 	TEMP_PRINT("Awa");
 
-	// TODO check expected nodes durint parsing already ???
 	expected_nodes en = { .tags = ST_TISM | ST_REPEAT | ST_SURF | ST_OVER | ST_MACRO | ST_PRINT };
 	if (generate_bytecode(root, tmp, en)) {
 		printf("Success!\n");
 	} else {
 		printf("Failure!\n");
 	}
-	free_st_nodes();
+	free_sdag_nodes();
 
 	if (0) {
 
@@ -696,27 +707,27 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 		if (numbers_only)
 			res = TOK_NUM;
 		else {
-			if (strncmp("PRINT", tokstr->start, tokstr->len) == 0)
+			if (cstr_sv_cmp("PRINT", *tokstr))
 				res = TOK_PRINT;
-			else if (strncmp("OVER", tokstr->start, tokstr->len) == 0)
+			else if (cstr_sv_cmp("OVER", *tokstr))
 				res = TOK_OVER;
-			else if (strncmp("SURF", tokstr->start, tokstr->len) == 0)
+			else if (cstr_sv_cmp("SURF", *tokstr))
 				res = TOK_SURF;
-			else if (strncmp("REPEAT", tokstr->start, tokstr->len) == 0)
+			else if (cstr_sv_cmp("REPEAT", *tokstr))
 				res = TOK_REPEAT;
-			else if (strncmp("END", tokstr->start, tokstr->len) == 0)
+			else if (cstr_sv_cmp("END", *tokstr))
 				res = TOK_REPEAT_END;
-			else if (strncmp("ITERATOR", tokstr->start, tokstr->len) == 0)
+			else if (cstr_sv_cmp("ITERATOR", *tokstr))
 				res = TOK_ITERATOR;
-			else
-				res = TOK_TISM;
+			else {
+				l->tism = tism_from_sv(*tokstr);
+				if (l->tism == AWAT_invalid)
+					res = TOK_NAME;
+				else
+					res = TOK_TISM;
+			}
 		}
 	}
-
-	if (res == TOK_TISM)
-		l->tism = tism_from_sv(*tokstr);
-	else
-		l->tism = AWAT_invalid;
 
 	return res;
 }
@@ -872,11 +883,18 @@ void init_lookup_table(void)
 #undef X
 }
 
+bool cstr_sv_cmp(char *cstr, sview sv)
+{
+	if (strlen(cstr) != sv.len)
+		return false;
+	return strncmp(cstr, sv.start, sv.len) == 0;
+}
+
 AWATISM tism_from_sv(sview tstr)
 {
-	if (strncmp("trm", tstr.start, tstr.len) == 0) return AWAT_trm;
+	if (cstr_sv_cmp("trm", tstr)) return AWAT_trm;
 #define X(name) \
-	else if (strncmp(#name, tstr.start, tstr.len) == 0) return AWAT_ ## name;
+	else if (cstr_sv_cmp(#name, tstr)) return AWAT_ ## name;
 	AWATISM_LIST
 #undef X
 	else return AWAT_invalid;
@@ -980,58 +998,57 @@ typedef struct {
 } node_arena;
 static node_arena arena = {0};
 
-st_node *new_st_node()
+sdag_node *new_sdag_node()
 {
 	if (arena.capacity == 0) {
 		arena.capacity = 500*1024*1024;
 		arena.data = calloc(1, arena.capacity);
 	}
-	assert(arena.capacity - arena.pos >= sizeof(st_node));
-	st_node *result = (st_node *)((char *)arena.data + arena.pos);
-	arena.pos += sizeof(st_node);
+	assert(arena.capacity - arena.pos >= sizeof(sdag_node));
+	sdag_node *result = (sdag_node *)((char *)arena.data + arena.pos);
+	arena.pos += sizeof(sdag_node);
 	return result;
 }
 
-void free_st_nodes()
+void free_sdag_nodes()
 {
 	free(arena.data);
 }
 
-// TODO: syntax checking with extra struct parser
-st_node *parse(lexer *l, parser *p)
+sdag_node *parse(lexer *l, parser *p)
 {
 	static int scope_depth = 0;
-	st_node *node = NULL;
-	st_node **cur = &node;
+	sdag_node *node = NULL;
+	sdag_node **cur = &node;
 
 	TOKEN tok;
 	sview op;
+	uint64_t exptoks = p->exptoks; // copy, since it's subject to change
 	bool done = false;
 	scope_depth += 1;
 	while (!done) {
 		tok = gettoken(l, &op);
+		// if (!(tok & exptoks)) asm("int3");
+		assert(tok & exptoks);
 
 		if ((*cur) != NULL)
 			cur = &((*cur)->next);
 
 		if (tok != TOK_EOF && tok != TOK_REPEAT_END && tok != TOK_ITERATOR) {
-			(*cur) = new_st_node(); //calloc(1, sizeof(st_node));
+			(*cur) = new_sdag_node(); //calloc(1, sizeof(sdag_node));
 			(*cur)->filename = l->filename;
 			(*cur)->linenum = l->linenum;
 		}
 
 		switch (tok) {
 		case TOK_EOF:
-			// TODO This prevents proper error message generation
-			// maybe pack expected tokens into parser struct
-			// or just let generate bytecode anyway even if we encounter this error
-			// just to get a proper error message
 			assert(scope_depth == 1); // TODO: error message
 			done = true;
 			break;
 		case TOK_REPEAT_END:
 			// TODO error message if alread in top scope
-			p->iterator = NULL; //TODO support nested loops
+			assert(scope_depth > 1);
+			p->iterator = p->iterator->as.iterator.next_it;
 			done = true; // Up a level
 			break;
 		case TOK_TISM:
@@ -1044,6 +1061,7 @@ st_node *parse(lexer *l, parser *p)
 				case AWAT_srn:
 				case AWAT_lbl:
 				case AWAT_jmp:
+					p->exptoks = TOK_AWASCII | TOK_NUM | TOK_ITERATOR | TOK_NAME;
 					(*cur)->as.tism.arg = parse(l, p);
 					break;
 				default:
@@ -1065,10 +1083,12 @@ st_node *parse(lexer *l, parser *p)
 			break;
 		case TOK_OVER:
 			(*cur)->tag = ST_OVER;
+			p->exptoks = TOK_NUM | TOK_ITERATOR | TOK_NAME;
 			(*cur)->as.over.arg = parse(l, p);
 			break;
 		case TOK_SURF:
 			(*cur)->tag = ST_SURF;
+			p->exptoks = TOK_NUM | TOK_ITERATOR | TOK_NAME;
 			(*cur)->as.surf.arg = parse(l, p);
 			break;
 		case TOK_STRING:
@@ -1078,24 +1098,71 @@ st_node *parse(lexer *l, parser *p)
 			break;
 		case TOK_PRINT:
 			(*cur)->tag = ST_PRINT;
+			p->exptoks = TOK_STRING;
 			(*cur)->as.print.arg = parse(l, p);
 			break;
-		case TOK_REPEAT:
+		case TOK_REPEAT:{
 			(*cur)->tag = ST_REPEAT;
-			(*cur)->as.repeat.range_start = parse(l, p);
-			(*cur)->as.repeat.range_stop = parse(l, p);
-			st_node *it = new_st_node();
+
+			sdag_node *it = new_sdag_node();
 			it->tag = ST_ITERATOR;
-			p->iterator = it;
-			(*cur)->as.repeat.iterator = it;
+			p->exptoks = TOK_NUM | TOK_ITERATOR | TOK_NAME;
+			sdag_node *iterator_or_range_start = parse(l, p);
+
+			sdag_node *it_or_NULL = NULL;
+			bool isname = (iterator_or_range_start->tag == ST_NAME);
+			if (isname)
+				it_or_NULL = lookup_iterator_name(p, iterator_or_range_start->as.name.sv);
+			bool isregistered = (it_or_NULL != NULL);
+
+			if (isname && !isregistered) {
+				it->as.iterator.name = iterator_or_range_start;
+				it->as.iterator.next_it = p->iterator;
+				p->iterator = it;
+				(*cur)->as.repeat.iterator = it;
+
+				p->exptoks = TOK_NUM | TOK_ITERATOR | TOK_NAME;
+				(*cur)->as.repeat.range_start = parse(l, p);
+			} else {
+				sdag_node *default_it_name = new_sdag_node();
+				default_it_name->tag = ST_NAME;
+				char *din = "ITERATOR";
+				default_it_name->as.name.sv = (sview){.start = din, .len = strlen(din)};
+				// TODO default iterator cannot be used twice error message
+				assert(!lookup_iterator_name(p, default_it_name->as.name.sv));
+
+				it->as.iterator.name = default_it_name;
+				it->as.iterator.next_it = p->iterator;
+				p->iterator = it;
+				(*cur)->as.repeat.iterator = it;
+
+				(*cur)->as.repeat.range_start = iterator_or_range_start;
+			}
+
+			p->exptoks = TOK_NUM | TOK_ITERATOR | TOK_NAME;
+			(*cur)->as.repeat.range_stop = parse(l, p);
+
+			p->exptoks = exptoks;
 			(*cur)->as.repeat.body = parse(l, p);
-			break;
-		case TOK_ITERATOR:
+			} break;
+		case TOK_ITERATOR:{
 			assert(p->iterator);
-			(*cur) = p->iterator; // TODO change this to look up named iterator for nested loops
+			char *defaultname = "ITERATOR";
+			sdag_node *it = lookup_iterator_name(p, (sview){.start = defaultname, .len = strlen(defaultname)});
+			assert(it);
+			(*cur) = it;
 			done = true; // Up a level
-			break;
-		// TODO: TOK_NAME for named iterators in nested loops
+			} break;
+		case TOK_NAME:{
+			sdag_node *name = lookup_iterator_name(p, op);
+			if (name) {
+				(*cur) = name; // just return the existing iterator
+			} else {
+				(*cur)->tag = ST_NAME;
+				(*cur)->as.name.sv = op;
+			}
+			done = true;
+			} break;
 		}
 	}
 	scope_depth -= 1;
@@ -1108,7 +1175,7 @@ st_node *parse(lexer *l, parser *p)
 		if (fprintf(outfile, __VA_ARGS__) < 0) goto gen_perr; \
 	} while (0)
 
-bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
+bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 {
 	if (node == NULL) {
 		if (en.tags == 0) return true; // nothing was expected and we got nothing
@@ -1119,6 +1186,7 @@ bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
 	}
 
 	for (; node != NULL; node = node->next) {
+		// if (!(node->tag & en.tags)) asm("int3");
 		assert(node->tag & en.tags); // TODO error message
 		switch (node->tag) {
 		case ST_TISM: {
@@ -1167,7 +1235,7 @@ bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
 			GEN_PRINT("%s", node->as.awascii.awastr);
 			break;
 		case ST_REPEAT: {
-			st_node *start = node->as.repeat.range_start;
+			sdag_node *start = node->as.repeat.range_start;
 			int startval = 0;
 			if (start->tag == ST_CONST)
 				startval = start->as.constant.val;
@@ -1178,7 +1246,7 @@ bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
 				assert(false);
 			}
 
-			st_node *stop = node->as.repeat.range_stop;
+			sdag_node *stop = node->as.repeat.range_stop;
 			int stopval = 0;
 			if (stop->tag == ST_CONST)
 				stopval = stop->as.constant.val;
@@ -1189,7 +1257,7 @@ bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
 				assert(false);
 			}
 
-			st_node *iterator = node->as.repeat.iterator;
+			sdag_node *iterator = node->as.repeat.iterator;
 			assert(iterator);
 			assert(iterator->tag == ST_ITERATOR);
 
@@ -1295,6 +1363,9 @@ bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
 			expected_nodes en_next = { .tags = ST_STRING };
 			if (!generate_bytecode(node->as.print.arg, outfile, en_next)) return false;
 			} break;
+		case ST_NAME:
+			assert(false && "st_name not implemented");
+			break;
 		}
 	}
 
@@ -1302,5 +1373,20 @@ bool generate_bytecode(st_node *node, FILE *outfile, expected_nodes en)
 gen_perr:
 	// TODO: print something to stderr
 	return false;
+}
+
+sdag_node *lookup_iterator_name(parser *p, sview name)
+{
+	sdag_node *result = NULL;
+	for (sdag_node *node = p->iterator; node != NULL; node = node->as.iterator.next_it) {
+		assert(node->tag == ST_ITERATOR);
+		sview sv1 = node->as.iterator.name->as.name.sv;
+		sview sv2 = name;
+		if (sv1.len == sv2.len && strncmp(sv1.start, sv2.start, sv2.len) == 0) {
+			result = node;
+			break;
+		}
+	}
+	return result;
 }
 

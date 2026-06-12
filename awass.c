@@ -287,6 +287,7 @@ void free_sdag_nodes();
 sdag_node *lookup_iterator_name(parser *p, sview name);
 
 bool cstr_sv_cmp(char *cstr, sview sv);
+char *tokstr(TOKEN t);
 
 int main(int argc, char *argv[])
 {
@@ -336,10 +337,9 @@ int main(int argc, char *argv[])
 	TEMP_PRINT("Awa");
 
 	expected_nodes en = { .tags = ST_TISM | ST_REPEAT | ST_SURF | ST_OVER | ST_MACRO | ST_PRINT };
-	if (generate_bytecode(root, tmp, en)) {
-		printf("Success!\n");
-	} else {
-		printf("Failure!\n");
+	if (!generate_bytecode(root, tmp, en)) {
+		fprintf(stderr, "Failed to generate awabytecode\n");
+		exit(1);
 	}
 	free_sdag_nodes();
 
@@ -1015,6 +1015,33 @@ void free_sdag_nodes()
 	free(arena.data);
 }
 
+#define ERROR_PARSE(...) \
+	do { \
+		fprintf(stderr, "%s:%zu: ERROR: ", l->filename, l->linenum); \
+		fprintf(stderr, __VA_ARGS__); \
+		fprintf(stderr, "\n"); \
+		exit(1); \
+	} while(0)
+
+char *tokstr(TOKEN t)
+{
+	switch (t) {
+	case TOK_TISM:        return "awatism instruction";
+	case TOK_AWASCII:     return "awascii char";
+	case TOK_NUM:         return "numeric constant";
+	case TOK_PRINT:       return "PRINT macro";
+	case TOK_OVER:        return "OVER macro";
+	case TOK_SURF:        return "SURF macro";
+	case TOK_REPEAT:      return "REPEAT";
+	case TOK_REPEAT_END:  return "END";
+	case TOK_ITERATOR:    return "ITERATOR";
+	case TOK_STRING:      return "string literal";
+	case TOK_NAME:        return "name (loop index)";
+	case TOK_EOF:         return "end of file";
+	default:              return "INVALID STRING LITERAL (This should never be displayed)";
+	}
+}
+
 sdag_node *parse(lexer *l, parser *p)
 {
 	static int scope_depth = 0;
@@ -1028,26 +1055,35 @@ sdag_node *parse(lexer *l, parser *p)
 	scope_depth += 1;
 	while (!done) {
 		tok = gettoken(l, &op);
-		// if (!(tok & exptoks)) asm("int3");
-		assert(tok & exptoks);
+		if (!(tok & exptoks)) {
+			char exptokstr[1000] = {0};
+			for (int i = 0; i < 20; i++) {
+				if (1<<i & exptoks) {
+					strcat(exptokstr, "\n    ");
+					strcat(exptokstr, tokstr(1<<i));
+				}
+			}
+			ERROR_PARSE("Got %s, but expected one of %s", tokstr(tok), exptokstr);
+		}
 
 		if ((*cur) != NULL)
 			cur = &((*cur)->next);
 
 		if (tok != TOK_EOF && tok != TOK_REPEAT_END && tok != TOK_ITERATOR) {
-			(*cur) = new_sdag_node(); //calloc(1, sizeof(sdag_node));
+			(*cur) = new_sdag_node();
 			(*cur)->filename = l->filename;
 			(*cur)->linenum = l->linenum;
 		}
 
 		switch (tok) {
 		case TOK_EOF:
-			assert(scope_depth == 1); // TODO: error message
+			if (scope_depth != 1)
+				ERROR_PARSE("Reached end of file unexpectedly (Did you forget to END a loop?)");
 			done = true;
 			break;
 		case TOK_REPEAT_END:
-			// TODO error message if alread in top scope
-			assert(scope_depth > 1);
+			if (scope_depth <= 1)
+				ERROR_PARSE("Reached END keyword while already in top scope");
 			p->iterator = p->iterator->as.iterator.next_it;
 			done = true; // Up a level
 			break;
@@ -1071,7 +1107,8 @@ sdag_node *parse(lexer *l, parser *p)
 		case TOK_AWASCII:
 			(*cur)->tag = ST_AWASCII;
 			nlist *np = lookup(sv_to_cstr(op));
-			assert(np); //TODO: error reporting
+			if (!np)
+				ERROR_PARSE("Failed to look up character: '%.*s'", (int)op.len, op.start);
 			(*cur)->as.awascii.awastr = np->defn;
 			done = true; // Up a level
 			break;
@@ -1106,7 +1143,7 @@ sdag_node *parse(lexer *l, parser *p)
 
 			sdag_node *it = new_sdag_node();
 			it->tag = ST_ITERATOR;
-			p->exptoks = TOK_NUM | TOK_ITERATOR | TOK_NAME;
+			p->exptoks = TOK_NUM | TOK_NAME;
 			sdag_node *iterator_or_range_start = parse(l, p);
 
 			sdag_node *it_or_NULL = NULL;
@@ -1128,8 +1165,8 @@ sdag_node *parse(lexer *l, parser *p)
 				default_it_name->tag = ST_NAME;
 				char *din = "ITERATOR";
 				default_it_name->as.name.sv = (sview){.start = din, .len = strlen(din)};
-				// TODO default iterator cannot be used twice error message
-				assert(!lookup_iterator_name(p, default_it_name->as.name.sv));
+				if (lookup_iterator_name(p, default_it_name->as.name.sv))
+					ERROR_PARSE("Cannot have two nested loops with unnamed loop indices");
 
 				it->as.iterator.name = default_it_name;
 				it->as.iterator.next_it = p->iterator;
@@ -1146,10 +1183,10 @@ sdag_node *parse(lexer *l, parser *p)
 			(*cur)->as.repeat.body = parse(l, p);
 			} break;
 		case TOK_ITERATOR:{
-			assert(p->iterator);
 			char *defaultname = "ITERATOR";
 			sdag_node *it = lookup_iterator_name(p, (sview){.start = defaultname, .len = strlen(defaultname)});
-			assert(it);
+			if (!it)
+				ERROR_PARSE("ITERATOR can only be used inside of loops with anonymous loop index");
 			(*cur) = it;
 			done = true; // Up a level
 			} break;
@@ -1170,29 +1207,43 @@ sdag_node *parse(lexer *l, parser *p)
 	return node;
 }
 
-#define GEN_PRINT(...) \
+#define PRINT_GEN(...) \
 	do { \
 		if (fprintf(outfile, __VA_ARGS__) < 0) goto gen_perr; \
 	} while (0)
+
+#define ERROR_GEN(...) \
+	do { \
+		fprintf(stderr, "%s:%zu: ERROR: ", node->filename, node->linenum); \
+		fprintf(stderr, __VA_ARGS__); \
+		fprintf(stderr, "\n"); \
+		exit(1); \
+	} while(0)
+
+#define WARN_GEN(...) \
+	do { \
+		fprintf(stderr, "%s:%zu: WARNING: ", node->filename, node->linenum); \
+		fprintf(stderr, __VA_ARGS__); \
+		fprintf(stderr, "\n"); \
+	} while(0)
 
 bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 {
 	if (node == NULL) {
 		if (en.tags == 0) return true; // nothing was expected and we got nothing
 		else {
-			// TODO error message
+			// Try not to go here
 			assert(false);
 		}
 	}
 
 	for (; node != NULL; node = node->next) {
-		// if (!(node->tag & en.tags)) asm("int3");
-		assert(node->tag & en.tags); // TODO error message
+		assert(node->tag & en.tags); // TODO error message (might be unreachable)
 		switch (node->tag) {
 		case ST_TISM: {
 			nlist *np = lookup(str_from_tism(node->as.tism.tag));
 			assert(np);
-			GEN_PRINT("%s", np->defn);
+			PRINT_GEN("%s", np->defn);
 			expected_nodes en_next = { .tags = ST_CONST | ST_AWASCII | ST_ITERATOR };
 			switch (node->as.tism.tag) {
 				case AWAT_blo:
@@ -1225,14 +1276,13 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 		case ST_CONST:
 			if (en.int_minval <= node->as.constant.val
 					&& node->as.constant.val <= en.int_maxval) {
-				GEN_PRINT("%s", awastr(node->as.constant.val, en.int_awa_bits));
+				PRINT_GEN("%s", awastr(node->as.constant.val, en.int_awa_bits));
 			} else {
-				// TODO error message
-				assert(false);
+				ERROR_GEN("Expected value in [%d, %d], got: %d", en.int_minval, en.int_maxval, node->as.constant.val);
 			}
 			break;
 		case ST_AWASCII:
-			GEN_PRINT("%s", node->as.awascii.awastr);
+			PRINT_GEN("%s", node->as.awascii.awastr);
 			break;
 		case ST_REPEAT: {
 			sdag_node *start = node->as.repeat.range_start;
@@ -1242,7 +1292,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (start->tag == ST_ITERATOR)
 				startval = start->as.iterator.val;
 			else {
-				// TODO error message
+				// TODO error message (unreachable?)
 				assert(false);
 			}
 
@@ -1253,7 +1303,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (stop->tag == ST_ITERATOR)
 				stopval = stop->as.iterator.val;
 			else {
-				// TODO error message
+				// TODO error message (unreachable?)
 				assert(false);
 			}
 
@@ -1263,9 +1313,13 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 
 			int delta = (startval > stopval) ? -1 : 1;
 
-			for (int i = startval; i <= stopval*delta; i += delta) {
-				iterator->as.iterator.val = i;
-				if (!generate_bytecode(node->as.repeat.body, outfile, en)) return false;
+			if (node->as.repeat.body != NULL) {
+				for (int i = startval; i <= stopval*delta; i += delta) {
+					iterator->as.iterator.val = i;
+					if (!generate_bytecode(node->as.repeat.body, outfile, en)) return false;
+				}
+			} else {
+				WARN_GEN("Empty loop body");
 			}
 
 			} break;
@@ -1273,10 +1327,9 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			// just check iterator against expected and print
 			int val = node->as.iterator.val;
 			if (en.int_minval <= val && val <= en.int_maxval)
-				GEN_PRINT("%s", awastr(val, en.int_awa_bits));
+				PRINT_GEN("%s", awastr(val, en.int_awa_bits));
 			else {
-				// TODO error message
-				assert(false);
+				ERROR_GEN("Expected value in [%d, %d], got: %d", en.int_minval, en.int_maxval, val);
 			}
 			break;
 		case ST_SURF: {
@@ -1287,16 +1340,15 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (tag == ST_ITERATOR)
 				n = node->as.over.arg->as.iterator.val;
 			else {
-				// TODO error message
+				// TODO error message (unreachable?)
 				assert(false);
 			}
 
 			if (0 <= n && n <= 31) {
 				for (int i = 0; i < n; i++)
-					GEN_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+					PRINT_GEN("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
 			} else {
-				// TODO error message
-				assert(false);
+				ERROR_GEN("Expected value in [%d, %d], got: %d", 0, 31, n);
 			}
 			} break;
 		case ST_OVER: {
@@ -1307,17 +1359,16 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (tag == ST_ITERATOR)
 				n = node->as.over.arg->as.iterator.val;
 			else {
-				// TODO error message
+				// TODO error message (unreachable?)
 				assert(false);
 			}
 			if (0 <= n && n <= 30) {
 				for (int i = 0; i < n; i++)
-					GEN_PRINT("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
-				GEN_PRINT("%s", lookup("dpl")->defn); // 1 time
-				GEN_PRINT("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
+					PRINT_GEN("%s%s", lookup("sbm")->defn, awastr(n, 5)); // n times
+				PRINT_GEN("%s", lookup("dpl")->defn); // 1 time
+				PRINT_GEN("%s%s", lookup("sbm")->defn, awastr(n + 1, 5)); // 1 time
 			} else {
-				// TODO error message
-				assert(false);
+				ERROR_GEN("Expected value in [%d, %d], got: %d", 0, 30, n);
 			}
 			} break;
 		case ST_MACRO:
@@ -1340,12 +1391,12 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 						char *printme; \
 						int size = print_stack_size(); \
 						while ((printme = print_stack_pop()) != NULL) { \
-							GEN_PRINT("%s", lookup("blo")->defn); \
-							GEN_PRINT("%s", printme); \
+							PRINT_GEN("%s", lookup("blo")->defn); \
+							PRINT_GEN("%s", printme); \
 						} \
-						GEN_PRINT("%s", lookup("srn")->defn); \
-						GEN_PRINT("%s", awastr(size, 5)); \
-						GEN_PRINT("%s", lookup("prn")->defn);
+						PRINT_GEN("%s", lookup("srn")->defn); \
+						PRINT_GEN("%s", awastr(size, 5)); \
+						PRINT_GEN("%s", lookup("prn")->defn);
 						PRINTSTACK_FLUSH();
 						print_stack_push(np->defn);
 					}
@@ -1364,14 +1415,14 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			if (!generate_bytecode(node->as.print.arg, outfile, en_next)) return false;
 			} break;
 		case ST_NAME:
-			assert(false && "st_name not implemented");
+			assert(false && "printing st_name not implemented");
 			break;
 		}
 	}
 
 	return true;
 gen_perr:
-	// TODO: print something to stderr
+	perror("TEMPFILE");
 	return false;
 }
 

@@ -5,12 +5,20 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <assert.h>
+#include <limits.h>
 
 /*
 * converts Awassembly into Awabytecode
 * no dependencies
 * supplied as is, without warranty
 */
+
+#define UNREACHABLE() \
+	do { \
+		fprintf(stderr, "%s:%d: This code is supposed to be unreachable.\n", __FILE__, __LINE__); \
+		exit(2); \
+	} while(0)
+
 
 #define AWATISM_LIST \
 	X(nop) \
@@ -290,6 +298,8 @@ bool cstr_sv_cmp(char *cstr, sview sv);
 char *tokstr(TOKEN t);
 char *tagstr(NODE_TAG t);
 
+bool svtoi(sview sv, int *result);
+
 int main(int argc, char *argv[])
 {
 	char *progname = argv[0];
@@ -456,7 +466,7 @@ TOKEN gettoken(lexer *l, sview *tokstr)
 		tokstr->len = 1;
 		if (*c != '-' && *c != '+' && !isdigit(*c))
 			numbers_only = false;
-		while ((c = getch(&l->ef)) != NULL && !isspace(*c)) {
+		while ((c = getch(&l->ef)) != NULL && !isspace(*c) && *c != ';') {
 			if (!isdigit(*c))
 				numbers_only = false;
 			tokstr->len += 1;
@@ -872,8 +882,11 @@ sdag_node *parse(lexer *l, parser *p)
 			break;
 		case TOK_NUM:
 			(*cur)->tag = ST_CONST;
-			assert(op.len <= 8); //TODO proper number parsing
-			(*cur)->as.constant.val = atoi(sv_to_cstr(op));
+			int *result = &((*cur)->as.constant.val);
+			if (!svtoi(op, result))
+				ERROR_PARSE(    "Failed to parse number: '%.*s'\n"
+						"    Expected number in [%d, %d]",
+						(int)op.len, op.start, -INT_MAX, INT_MAX);
 			done = true; // Up a level
 			break;
 		case TOK_OVER:
@@ -1081,8 +1094,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (start->tag == ST_ITERATOR)
 				startval = start->as.iterator.val;
 			else {
-				// TODO error message (unreachable?)
-				assert(false);
+				UNREACHABLE();
 			}
 
 			sdag_node *stop = node->as.repeat.range_stop;
@@ -1092,8 +1104,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (stop->tag == ST_ITERATOR)
 				stopval = stop->as.iterator.val;
 			else {
-				// TODO error message (unreachable?)
-				assert(false);
+				UNREACHABLE();
 			}
 
 			sdag_node *iterator = node->as.repeat.iterator;
@@ -1103,7 +1114,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			int delta = (startval > stopval) ? -1 : 1;
 
 			if (node->as.repeat.body != NULL) {
-				for (int i = startval; i <= stopval*delta; i += delta) {
+				for (int i = startval; (stopval - i)*delta >= 0; i += delta) {
 					iterator->as.iterator.val = i;
 					if (!generate_bytecode(node->as.repeat.body, outfile, en)) return false;
 				}
@@ -1129,8 +1140,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (tag == ST_ITERATOR)
 				n = node->as.over.arg->as.iterator.val;
 			else {
-				// TODO error message (unreachable?)
-				assert(false);
+				UNREACHABLE();
 			}
 
 			if (0 <= n && n <= 31) {
@@ -1148,8 +1158,7 @@ bool generate_bytecode(sdag_node *node, FILE *outfile, expected_nodes en)
 			else if (tag == ST_ITERATOR)
 				n = node->as.over.arg->as.iterator.val;
 			else {
-				// TODO error message (unreachable?)
-				assert(false);
+				UNREACHABLE();
 			}
 			if (0 <= n && n <= 30) {
 				for (int i = 0; i < n; i++)
@@ -1228,5 +1237,36 @@ sdag_node *lookup_iterator_name(parser *p, sview name)
 		}
 	}
 	return result;
+}
+
+#define shift(x, xs) (assert((xs) > 0), (xs)--, *(x)++)
+bool svtoi(sview sv, int *result)
+{
+	if (sv.len <= 0) return false;
+	int sign = (*sv.start == '-') ? -1 : +1;
+	if (*sv.start == '+' || *sv.start == '-')
+		shift(sv.start, sv.len);
+
+	char c;
+	*result = 0;
+	while (sv.len > 0) {
+		c = shift(sv.start, sv.len);
+		if (!isdigit(c)) return false;
+		int digit = c - '0';
+
+		if (*result != 0) {
+			int oom = INT_MAX / *result;
+			if (oom < 10) return false;
+		}
+		*result *= 10;
+
+		int gap = INT_MAX - *result;
+		if (gap < digit) return false;
+		*result += digit;
+	}
+
+	*result *= sign;
+
+	return true;
 }
 

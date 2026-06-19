@@ -41,8 +41,8 @@ Note: macros expand into multiple instructions which do not act as a single stat
 | PRINT    | String of chars in double quotes                      | PRINTS a string contained in double quotes                                |
 | OVER     | 5 bit unsigned integer [0,30]                         | copies value from specified depth on top of the stack (OVER 0 == dpl)     |
 | SURF     | 5 bit unsigned integer [0,31]                         | move the element at specified depth to the surface (SURF 0 has no effect) |
-| REPEAT   | two integers making up the start and end of the range | start of a REPEAT/END block which is used for code generation             |
-| ITERATOR |                                                       | can be used in a REPEAT/END block to get the current index in [start,end] |
+| REPEAT   | [name:iterator], int:range start, int:range end       | start of a REPEAT/END block which is used for code generation             |
+| ITERATOR |                                                       | can be used to get the index in REPEAT/END blocks with anonymous iterator |
 | END      |                                                       | marks the end of REPEAT/END block                                         |
 
 The PRINT macro also converts some chars automatically to AwaSCII. For example:

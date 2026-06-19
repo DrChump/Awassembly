@@ -13,6 +13,8 @@
 * supplied as is, without warranty
 */
 
+#define shift(x, xs) (assert((xs) > 0), (xs)--, *(x)++)
+
 #define UNREACHABLE() \
 	do { \
 		fprintf(stderr, "%s:%d: This code is supposed to be unreachable.\n", __FILE__, __LINE__); \
@@ -302,25 +304,26 @@ bool svtoi(sview sv, int *result);
 
 int main(int argc, char *argv[])
 {
-	char *progname = argv[0];
+	char *progname = shift(argv, argc);
 	char *outfile, *infile;
 	outfile = infile = NULL;
 
 	init_lookup_table();
 
 	bool more_opts = true;
-	while (--argc > 0) {
-		++argv;
-		if ((*argv)[0] == '-' && more_opts) {
-			if (strcmp("-o", *argv) == 0 && outfile == NULL) {
-				if (--argc > 0) ++argv;
+	char *arg;
+	while (argc > 0) {
+		arg = shift(argv, argc);
+		if (arg[0] == '-' && more_opts) {
+			if (strcmp("-o", arg) == 0 && outfile == NULL) {
+				if (argc > 0) arg = shift(argv, argc);
 				else usage(progname);
-				outfile = *argv;
-			} else if (strcmp("--", *argv) == 0) {
+				outfile = arg;
+			} else if (strcmp("--", arg) == 0) {
 				more_opts = false;
 			} else usage(progname);
 		} else if (infile == NULL){
-			infile = *argv;
+			infile = arg;
 		} else usage(progname);
 	}
 	if (infile == NULL) usage(progname);
@@ -1239,7 +1242,6 @@ sdag_node *lookup_iterator_name(parser *p, sview name)
 	return result;
 }
 
-#define shift(x, xs) (assert((xs) > 0), (xs)--, *(x)++)
 bool svtoi(sview sv, int *result)
 {
 	if (sv.len <= 0) return false;
